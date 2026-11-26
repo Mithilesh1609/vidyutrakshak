@@ -1,0 +1,10 @@
+services:
+  vidyutrakshak:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Leave empty for open demo mode. Format: role:key,role:key
+      # Roles: viewer (read), vigilance (+ record outcomes), admin (+ retrain)
+      VR_API_KEYS: ""
+    restart: unless-stopped

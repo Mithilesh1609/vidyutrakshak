@@ -1,0 +1,50 @@
+{
+  "runs": [
+    {
+      "consumers": 95880,
+      "dts": 1604,
+      "feeders": 200,
+      "days": 365,
+      "seconds": {
+        "simulate network (test data only)": 10.1,
+        "load MDMS / DT / billing tables": 0.5,
+        "build features (peers, DT balance)": 11.0,
+        "anomaly layer (Isolation Forest)": 1.3,
+        "train model (+ calibration)": 0.7,
+        "score all + reasons (EN/GU)": 1.1,
+        "DT and feeder roll-ups": 0.8
+      },
+      "total_seconds_excluding_simulation": 15.4,
+      "peak_memory_mb": 2146,
+      "peak_memory_mb_simulation": 1410,
+      "machine": {
+        "cpu_count": 12,
+        "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+        "python": "3.10.12"
+      }
+    },
+    {
+      "consumers": 192015,
+      "dts": 3206,
+      "feeders": 400,
+      "days": 365,
+      "seconds": {
+        "simulate network (test data only)": 17.6,
+        "load MDMS / DT / billing tables": 0.9,
+        "build features (peers, DT balance)": 24.2,
+        "anomaly layer (Isolation Forest)": 2.4,
+        "train model (+ calibration)": 1.7,
+        "score all + reasons (EN/GU)": 2.3,
+        "DT and feeder roll-ups": 1.5
+      },
+      "total_seconds_excluding_simulation": 33.0,
+      "peak_memory_mb": 3972,
+      "peak_memory_mb_simulation": 2593,
+      "machine": {
+        "cpu_count": 12,
+        "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+        "python": "3.10.12"
+      }
+    }
+  ]
+}

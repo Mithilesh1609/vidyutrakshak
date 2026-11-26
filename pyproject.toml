@@ -1,0 +1,9 @@
+[project]
+name = "vidyutrakshak"
+version = "0.2.0"
+description = "Explainable electricity theft risk scoring for DISCOMs (SFIC 2026, PS000205)"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

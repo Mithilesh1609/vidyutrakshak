@@ -1,0 +1,152 @@
+{
+  "dataset": "SGCC electricity theft (State Grid Corporation of China)",
+  "source": "github.com/henryRDlab/ElectricityTheftDetection",
+  "evaluation": "5-fold stratified cross-validation; top 4% = inspection capacity",
+  "limits": "No DT meters, tariff category, sanctioned load or tamper logs in SGCC; peers are the whole population. Lower bound for the meter-only path, not the full system.",
+  "runs": [
+    {
+      "days": 365,
+      "consumers": 42372,
+      "thieves": 3615,
+      "window": [
+        "2015-11-01",
+        "2016-10-31"
+      ],
+      "results": [
+        {
+          "approach": "Random inspection",
+          "note": "base rate",
+          "roc_auc": 0.4963521014416492,
+          "pr_auc": 0.08509995455475426,
+          "precision_at_k": 0.09031877213695395,
+          "recall_at_k": 0.04232365145228216,
+          "k": 1694,
+          "lift_vs_random": 1.0586409441181226
+        },
+        {
+          "approach": "Rule: flag >50% consumption drop",
+          "note": "",
+          "roc_auc": 0.43945946354901094,
+          "pr_auc": 0.07127678304751031,
+          "precision_at_k": 0.0295159386068477,
+          "recall_at_k": 0.013831258644536652,
+          "k": 1694,
+          "lift_vs_random": 0.3459610928490597
+        },
+        {
+          "approach": "Anomaly detection only (no labels)",
+          "note": "",
+          "roc_auc": 0.49733273007818946,
+          "pr_auc": 0.08746548996730998,
+          "precision_at_k": 0.12278630460448642,
+          "recall_at_k": 0.05753803596127247,
+          "k": 1694,
+          "lift_vs_random": 1.4391981462520882
+        },
+        {
+          "approach": "Black-box: LightGBM on raw weekly series",
+          "note": "reference, not explainable",
+          "roc_auc": 0.6782925574038987,
+          "pr_auc": 0.2120970961199346,
+          "precision_at_k": 0.3187721369539551,
+          "recall_at_k": 0.14937759336099585,
+          "k": 1694,
+          "lift_vs_random": 3.7363798027698443
+        },
+        {
+          "approach": "VidyutRakshak meter-only signals (explainable)",
+          "note": "same feature code as the prototype",
+          "roc_auc": 0.712851968275146,
+          "pr_auc": 0.2550662529844957,
+          "precision_at_k": 0.3984651711924439,
+          "recall_at_k": 0.18672199170124482,
+          "k": 1694,
+          "lift_vs_random": 4.6704747534623055
+        },
+        {
+          "approach": "VidyutRakshak signals + raw weekly series",
+          "note": "upper reference",
+          "roc_auc": 0.7572855031657868,
+          "pr_auc": 0.3223618405128257,
+          "precision_at_k": 0.4704840613931523,
+          "recall_at_k": 0.22047026279391424,
+          "k": 1694,
+          "lift_vs_random": 5.514619820014011
+        }
+      ],
+      "runtime_s": 32.3
+    },
+    {
+      "days": 730,
+      "consumers": 42372,
+      "thieves": 3615,
+      "window": [
+        "2014-11-01",
+        "2016-10-31"
+      ],
+      "results": [
+        {
+          "approach": "Random inspection",
+          "note": "base rate",
+          "roc_auc": 0.4963521014416492,
+          "pr_auc": 0.08509995455475426,
+          "precision_at_k": 0.09031877213695395,
+          "recall_at_k": 0.04232365145228216,
+          "k": 1694,
+          "lift_vs_random": 1.0586409441181226
+        },
+        {
+          "approach": "Rule: flag >50% consumption drop",
+          "note": "",
+          "roc_auc": 0.43785361791245236,
+          "pr_auc": 0.07112380249125241,
+          "precision_at_k": 0.030696576151121605,
+          "recall_at_k": 0.014384508990318118,
+          "k": 1694,
+          "lift_vs_random": 0.35979953656302205
+        },
+        {
+          "approach": "Anomaly detection only (no labels)",
+          "note": "",
+          "roc_auc": 0.49691400591499807,
+          "pr_auc": 0.08801260221105836,
+          "precision_at_k": 0.11393152302243212,
+          "recall_at_k": 0.05338865836791148,
+          "k": 1694,
+          "lift_vs_random": 1.3354098183973704
+        },
+        {
+          "approach": "Black-box: LightGBM on raw weekly series",
+          "note": "reference, not explainable",
+          "roc_auc": 0.7436674108502632,
+          "pr_auc": 0.29775906031405747,
+          "precision_at_k": 0.44391971664698937,
+          "recall_at_k": 0.20802213001383127,
+          "k": 1694,
+          "lift_vs_random": 5.203254836449857
+        },
+        {
+          "approach": "VidyutRakshak meter-only signals (explainable)",
+          "note": "same feature code as the prototype",
+          "roc_auc": 0.7391726425647965,
+          "pr_auc": 0.28470113093445387,
+          "precision_at_k": 0.4279811097992916,
+          "recall_at_k": 0.20055325034578148,
+          "k": 1694,
+          "lift_vs_random": 5.016435846311365
+        },
+        {
+          "approach": "VidyutRakshak signals + raw weekly series",
+          "note": "upper reference",
+          "roc_auc": 0.7982020363001574,
+          "pr_auc": 0.39694107560469155,
+          "precision_at_k": 0.5602125147579693,
+          "recall_at_k": 0.2625172890733057,
+          "k": 1694,
+          "lift_vs_random": 6.566341542275152
+        }
+      ],
+      "runtime_s": 49.5
+    }
+  ]
+}

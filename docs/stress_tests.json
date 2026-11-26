@@ -1,0 +1,246 @@
+{
+  "protocol": [
+    "Each scenario regenerates the network (5 seeds), runs the same protocol as the",
+    "pipeline (initial vigilance records + 3 feedback rounds of 60 inspections from",
+    "the model's queue), then scores a holdout area the loop never touches."
+  ],
+  "seeds": [
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "scenarios": [
+    {
+      "scenario": "Baseline",
+      "description": "Simulated network as in the demo",
+      "knobs": {},
+      "k": 71,
+      "base_rate": 0.04470209007792146,
+      "meter_only": {
+        "hit_rate": 0.8442335802403598,
+        "recall": 0.7514163005289289,
+        "pr_auc": 0.8765489333756513,
+        "legit_visits": 7.866666666666665,
+        "drop_slice_legit_in_top": 10.533333333333335,
+        "chronic_recall": null
+      },
+      "current": {
+        "hit_rate": 0.8583823155501712,
+        "recall": 0.7647431613490543,
+        "pr_auc": 0.8946573412743154,
+        "legit_visits": 6.8,
+        "drop_slice_legit_in_top": 8.733333333333333,
+        "chronic_recall": null
+      },
+      "current_plus_level": {
+        "hit_rate": 0.8653217912039924,
+        "recall": 0.771190617486465,
+        "pr_auc": 0.8932755449574955,
+        "legit_visits": 6.4,
+        "drop_slice_legit_in_top": 8.933333333333334,
+        "chronic_recall": null
+      }
+    },
+    {
+      "scenario": "Long-running theft",
+      "description": "Half of all thefts began before the data starts (no change point)",
+      "knobs": {
+        "chronic_theft_share": 0.5
+      },
+      "k": 71,
+      "base_rate": 0.04154282966996175,
+      "meter_only": {
+        "hit_rate": 0.824192327955559,
+        "recall": 0.7885602227237875,
+        "pr_auc": 0.8841720100444256,
+        "legit_visits": 7.0,
+        "drop_slice_legit_in_top": 6.8,
+        "chronic_recall": 0.8300373206069457
+      },
+      "current": {
+        "hit_rate": 0.8484332536852257,
+        "recall": 0.8118022859922801,
+        "pr_auc": 0.8967789758549243,
+        "legit_visits": 5.4,
+        "drop_slice_legit_in_top": 6.266666666666667,
+        "chronic_recall": 0.847205886397042
+      },
+      "current_plus_level": {
+        "hit_rate": 0.8508967100339131,
+        "recall": 0.8136483634361836,
+        "pr_auc": 0.901041415273738,
+        "legit_visits": 5.266666666666666,
+        "drop_slice_legit_in_top": 5.733333333333333,
+        "chronic_recall": 0.8490682811662842
+      }
+    },
+    {
+      "scenario": "Subtle theft",
+      "description": "Half of all thefts bypass only 10-25% of load",
+      "knobs": {
+        "subtle_theft_share": 0.5
+      },
+      "k": 71,
+      "base_rate": 0.0436438556091855,
+      "meter_only": {
+        "hit_rate": 0.6877355106392307,
+        "recall": 0.6291526668368773,
+        "pr_auc": 0.7254485166143614,
+        "legit_visits": 11.066666666666666,
+        "drop_slice_legit_in_top": 6.933333333333333,
+        "chronic_recall": null
+      },
+      "current": {
+        "hit_rate": 0.7304964531910607,
+        "recall": 0.6679012595591542,
+        "pr_auc": 0.7638696024095151,
+        "legit_visits": 8.866666666666667,
+        "drop_slice_legit_in_top": 5.7333333333333325,
+        "chronic_recall": null
+      },
+      "current_plus_level": {
+        "hit_rate": 0.7189679278928149,
+        "recall": 0.6568174976596028,
+        "pr_auc": 0.7570556605222479,
+        "legit_visits": 9.2,
+        "drop_slice_legit_in_top": 6.8,
+        "chronic_recall": null
+      }
+    },
+    {
+      "scenario": "Half the DTs unmetered",
+      "description": "Only 50% of transformers have a working boundary meter",
+      "knobs": {
+        "dt_meter_coverage": 0.5
+      },
+      "k": 71,
+      "base_rate": 0.042746079412558854,
+      "meter_only": {
+        "hit_rate": 0.8208762197630527,
+        "recall": 0.7627666951725172,
+        "pr_auc": 0.8797399697511693,
+        "legit_visits": 10.0,
+        "drop_slice_legit_in_top": 10.066666666666666,
+        "chronic_recall": null
+      },
+      "current": {
+        "hit_rate": 0.8290693368268119,
+        "recall": 0.7702162482556318,
+        "pr_auc": 0.8868036781890181,
+        "legit_visits": 9.2,
+        "drop_slice_legit_in_top": 9.666666666666666,
+        "chronic_recall": null
+      },
+      "current_plus_level": {
+        "hit_rate": 0.8316107244565192,
+        "recall": 0.772511915234518,
+        "pr_auc": 0.8859668777433096,
+        "legit_visits": 9.2,
+        "drop_slice_legit_in_top": 9.733333333333333,
+        "chronic_recall": null
+      }
+    },
+    {
+      "scenario": "No DT meters",
+      "description": "No transformer boundary meters at all",
+      "knobs": {
+        "dt_meter_coverage": 0.0
+      },
+      "k": 71,
+      "base_rate": 0.042746079412558854,
+      "meter_only": {
+        "hit_rate": 0.857626448480145,
+        "recall": 0.7969571751677916,
+        "pr_auc": 0.9080578748833226,
+        "legit_visits": 7.8,
+        "drop_slice_legit_in_top": 9.066666666666666,
+        "chronic_recall": null
+      },
+      "current": {
+        "hit_rate": 0.857626448480145,
+        "recall": 0.7969571751677916,
+        "pr_auc": 0.9080578748833226,
+        "legit_visits": 7.8,
+        "drop_slice_legit_in_top": 9.066666666666666,
+        "chronic_recall": null
+      },
+      "current_plus_level": {
+        "hit_rate": 0.8553499260922018,
+        "recall": 0.7946609214588667,
+        "pr_auc": 0.9043110494427034,
+        "legit_visits": 7.666666666666667,
+        "drop_slice_legit_in_top": 8.666666666666668,
+        "chronic_recall": null
+      }
+    },
+    {
+      "scenario": "GIS errors",
+      "description": "10% of consumers indexed to the wrong DT",
+      "knobs": {
+        "gis_mistag_rate": 0.1
+      },
+      "k": 71,
+      "base_rate": 0.04064284462049364,
+      "meter_only": {
+        "hit_rate": 0.812280722819741,
+        "recall": 0.7941912550290675,
+        "pr_auc": 0.8921507498593716,
+        "legit_visits": 11.466666666666667,
+        "drop_slice_legit_in_top": 10.933333333333334,
+        "chronic_recall": null
+      },
+      "current": {
+        "hit_rate": 0.81230793925847,
+        "recall": 0.7944744346047405,
+        "pr_auc": 0.8947517833916351,
+        "legit_visits": 11.266666666666667,
+        "drop_slice_legit_in_top": 10.6,
+        "chronic_recall": null
+      },
+      "current_plus_level": {
+        "hit_rate": 0.8110010656963121,
+        "recall": 0.7927250703696712,
+        "pr_auc": 0.8929565151193415,
+        "legit_visits": 11.0,
+        "drop_slice_legit_in_top": 10.4,
+        "chronic_recall": null
+      }
+    },
+    {
+      "scenario": "Poor MDMS data",
+      "description": "20% of meters with communication gaps (vs 5%)",
+      "knobs": {
+        "comm_fault_rate": 0.2
+      },
+      "k": 71,
+      "base_rate": 0.04371407261647921,
+      "meter_only": {
+        "hit_rate": 0.8181188174499503,
+        "recall": 0.7436538370398658,
+        "pr_auc": 0.880717402866282,
+        "legit_visits": 10.666666666666666,
+        "drop_slice_legit_in_top": 11.733333333333333,
+        "chronic_recall": null
+      },
+      "current": {
+        "hit_rate": 0.8319420192954439,
+        "recall": 0.7558921762310882,
+        "pr_auc": 0.8916950777294176,
+        "legit_visits": 9.533333333333333,
+        "drop_slice_legit_in_top": 9.733333333333333,
+        "chronic_recall": null
+      },
+      "current_plus_level": {
+        "hit_rate": 0.8429390299109082,
+        "recall": 0.7660952200725759,
+        "pr_auc": 0.8933087164088291,
+        "legit_visits": 8.866666666666665,
+        "drop_slice_legit_in_top": 9.066666666666666,
+        "chronic_recall": null
+      }
+    }
+  ],
+  "runtime_s": 85
+}

@@ -1,0 +1,676 @@
+<title>VidyutRakshak Console</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+Gujarati:wght@400;500&display=swap">
+<style>
+/* Layout: a control-room console. Summary strip, then three working views
+   (inspection queue, network areas, model health). Queue = list + detail. */
+:root {
+  --bg: #f3f6f6; --surface: #ffffff; --surface-2: #eaf0f0; --line: #d6e0e0;
+  --fg: #12201f; --muted: #57696a; --faint: #8a9a9b;
+  --accent: #0d766e; --accent-ink: #ffffff; --accent-weak: #d5ecea;
+  --high: #c03f2b; --high-weak: #f8e1dc; --med: #a86d12; --med-weak: #f6ead2;
+  --low: #3c7a4b; --low-weak: #dcefe1; --exp: #8a9a9b;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Noto Sans Gujarati", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1516; --surface: #142022; --surface-2: #1a292b; --line: #263739;
+  --fg: #e2ebeb; --muted: #9aaeaf; --faint: #6f8486;
+  --accent: #3cb7aa; --accent-ink: #062321; --accent-weak: #173a38;
+  --high: #f0806b; --high-weak: #3d2220; --med: #e2ad52; --med-weak: #3a2e17;
+  --low: #7dbb8d; --low-weak: #1d3324; --exp: #6f8486; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0d1516; --surface: #142022; --surface-2: #1a292b; --line: #263739;
+  --fg: #e2ebeb; --muted: #9aaeaf; --faint: #6f8486;
+  --accent: #3cb7aa; --accent-ink: #062321; --accent-weak: #173a38;
+  --high: #f0806b; --high-weak: #3d2220; --med: #e2ad52; --med-weak: #3a2e17;
+  --low: #7dbb8d; --low-weak: #1d3324; --exp: #6f8486; color-scheme: dark }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--f-body); margin: 0 }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 18px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: .005em }
+h1 { font-size: 1.6rem; line-height: 1.15 }
+h2 { font-size: 1.15rem }
+h3 { font-size: 1rem }
+.mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+.label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600 }
+.muted { color: var(--muted) }
+button, select, input { font: inherit; color: inherit }
+button { cursor: pointer }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; margin-bottom: 18px }
+.brand { display: flex; gap: 12px; align-items: center; min-width: 0 }
+.glyph { width: 38px; height: 38px; flex: none }
+.sub { color: var(--muted); font-size: .85rem; margin-top: 2px }
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chip { font-size: .75rem; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap }
+.chip b { color: var(--fg); font-weight: 600 }
+.chip.sim { background: var(--med-weak); color: var(--med); border-color: transparent }
+
+/* KPI strip */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-bottom: 18px }
+.kpi { background: var(--surface); padding: 14px 16px; min-width: 0 }
+.kpi .v { font-family: var(--f-display); font-size: 1.75rem; font-weight: 600; line-height: 1.1; margin-top: 4px; font-variant-numeric: tabular-nums }
+.kpi .n { font-size: .8rem; color: var(--muted); margin-top: 2px }
+.kpi .v.hi { color: var(--high) }
+@media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) } .kpi .v { font-size: 1.4rem } }
+
+/* tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; overflow-x: auto }
+.tab { background: none; border: 0; padding: 10px 12px; color: var(--muted); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent) }
+
+/* queue */
+.qgrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r) }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line) }
+.toolbar label { display: flex; gap: 6px; align-items: center; font-size: .8rem; color: var(--muted) }
+select, input[type=number] { background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: .85rem }
+input[type=number] { width: 64px }
+.list { list-style: none; margin: 0; padding: 0 }
+.row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); cursor: pointer; align-items: center; position: relative }
+.row:last-child { border-bottom: 0 }
+.row:hover { background: var(--surface-2) }
+.row[aria-selected="true"] { background: var(--accent-weak) }
+.row[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent) }
+.rank { font-family: var(--f-mono); color: var(--faint); font-size: .8rem; text-align: right }
+.rid { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap }
+.rid .mono { font-weight: 500 }
+.rwhy { font-size: .8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.cat { font-size: .68rem; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px }
+.score { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 64px }
+.meter { width: 64px; height: 5px; background: var(--surface-2); border-radius: 3px; overflow: hidden }
+.meter i { display: block; height: 100% }
+.pill { font-size: .7rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; letter-spacing: .03em }
+.pill.High { background: var(--high-weak); color: var(--high) }
+.pill.Medium { background: var(--med-weak); color: var(--med) }
+.pill.Low { background: var(--low-weak); color: var(--low) }
+.pill.done { background: var(--surface-2); color: var(--muted) }
+
+.detail { padding: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px); overflow: auto }
+.dhead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start }
+.big { font-family: var(--f-display); font-size: 2.2rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums }
+.reasons { margin: 14px 0; padding: 0; list-style: none; display: grid; gap: 8px }
+.reasons li { padding: 9px 11px; background: var(--surface-2); border-radius: 8px; font-size: .88rem; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px }
+.reasons li span:first-child { font-family: var(--f-mono); color: var(--accent); font-weight: 500 }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 4px }
+.facts div { min-width: 0 }
+.facts .v { font-family: var(--f-mono); font-size: .95rem; font-weight: 500 }
+.chartbox { margin-top: 14px }
+.chartbox svg { width: 100%; height: auto; display: block }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .75rem; color: var(--muted); margin-top: 4px }
+.legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 5px }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px }
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 8px 12px; border-radius: 8px; font-weight: 500; font-size: .85rem }
+.btn:hover { background: var(--surface-2) }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.btn.danger { color: var(--high); border-color: var(--high) }
+.close { display: none }
+.note { font-size: .78rem; color: var(--muted); margin-top: 10px }
+
+@media (max-width: 900px) {
+  .qgrid { grid-template-columns: minmax(0, 1fr) }
+  .detail { position: fixed; inset: auto 0 0 0; max-height: 88vh; border-radius: 16px 16px 0 0; z-index: 20;
+    padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    box-shadow: 0 -12px 40px rgba(0,0,0,.25); top: auto }
+  .close { display: inline-block }
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+}
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 19 }
+
+/* areas */
+.agrid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start }
+@media (max-width: 900px) { .agrid { grid-template-columns: minmax(0, 1fr) } }
+.mapbox { padding: 12px }
+.mapbox svg { width: 100%; height: auto; display: block }
+.dtnode { cursor: pointer }
+.dtnode:hover circle, .dtnode.sel circle { stroke: var(--fg); stroke-width: 2 }
+table { width: 100%; border-collapse: collapse; font-size: .85rem }
+th { text-align: left; font-size: .7rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+td { padding: 8px 10px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums }
+tr:last-child td { border-bottom: 0 }
+td.r, th.r { text-align: right }
+.tscroll { overflow-x: auto }
+.bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; min-width: 60px }
+.bar i { display: block; height: 100%; background: var(--high) }
+.scale { display: flex; align-items: center; gap: 8px; font-size: .72rem; color: var(--muted); margin-top: 8px; flex-wrap: wrap }
+.scale .grad { width: 120px; height: 8px; border-radius: 4px }
+
+/* model */
+.mgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px }
+.mgrid .wide { grid-column: 1 / -1 }
+@media (max-width: 900px) { .mgrid { grid-template-columns: minmax(0, 1fr) } }
+.pad { padding: 16px }
+.ph { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px }
+.best td { font-weight: 600 }
+.best td:first-child { color: var(--accent) }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: .85rem; z-index: 30; max-width: calc(100% - 32px) }
+.empty { padding: 28px 16px; color: var(--muted); text-align: center }
+.pill.cand { background: var(--med-weak); color: var(--med) }
+.gate { font-size: .78rem; color: var(--muted); margin-top: 10px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px }
+.gate b { color: var(--fg) }
+.ofield { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; margin-top: 10px }
+.ofield input { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 9px; font-size: .85rem; min-width: 0 }
+@media (max-width: 520px) { .ofield { grid-template-columns: minmax(0, 1fr) } }
+.keybox { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; display: grid; place-items: center; padding: 16px }
+.keybox form { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; width: min(380px, 100%); display: grid; gap: 10px }
+.keybox input { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 9px 10px; font: inherit; font-family: var(--f-mono) }
+.keybox .err { color: var(--high); font-size: .8rem; min-height: 1em }
+.rolechip { cursor: pointer }
+.toolbar .btn { margin-left: auto; padding: 6px 10px }
+@media (prefers-reduced-motion: no-preference) { .row, .tab, .btn { transition: background .12s, color .12s } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg class="glyph" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="1" y="1" width="38" height="38" rx="9" fill="var(--accent)"/>
+        <path d="M22 7 12 22h7l-2 11 11-16h-7z" fill="var(--accent-ink)"/>
+      </svg>
+      <div style="min-width:0">
+        <h1>VidyutRakshak</h1>
+        <div class="sub">Electricity theft risk console · PS000205 prototype for GUVNL DISCOMs</div>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </header>
+
+  <section class="kpis" id="kpis" aria-label="Summary"></section>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-view="queue" id="t-queue">Inspection queue</button>
+    <button class="tab" role="tab" data-view="areas" id="t-areas">Transformers &amp; feeders</button>
+    <button class="tab" role="tab" data-view="model" id="t-model">Model &amp; data health</button>
+  </nav>
+
+  <section id="v-queue" class="view">
+    <div class="qgrid">
+      <div class="panel">
+        <div class="toolbar">
+          <label for="f-feeder">Feeder <select id="f-feeder"><option value="">All</option></select></label>
+          <label for="f-band">Risk <select id="f-band"><option value="">All</option><option>High</option><option>Medium</option></select></label>
+          <label for="f-cap">Inspections today <input id="f-cap" type="number" min="5" max="150" step="5" value="25"></label>
+          <button class="btn" id="dl-list" type="button" title="Route sheet for field teams, sorted by feeder and DT">Download list</button>
+        </div>
+        <ol class="list" id="qlist"></ol>
+      </div>
+      <aside class="panel detail" id="detail" aria-live="polite"></aside>
+    </div>
+  </section>
+
+  <section id="v-areas" class="view" hidden>
+    <div class="agrid">
+      <div class="panel mapbox">
+        <div class="ph"><h2>Network view</h2><span class="label">Feeder → DT, coloured by DT risk</span></div>
+        <div id="map"></div>
+        <div class="scale"><span>Low risk</span><span class="grad" id="grad"></span><span>High risk</span><span>· circle size = consumers on DT</span></div>
+      </div>
+      <div class="panel pad" id="dtdetail"></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <div class="pad" style="padding-bottom:6px"><div class="ph"><h2>Feeders</h2><span class="label">Excess loss = rise above each DT's own baseline</span></div></div>
+      <div class="tscroll"><table id="ftable"></table></div>
+    </div>
+  </section>
+
+  <section id="v-model" class="view" hidden>
+    <div class="mgrid">
+      <div class="panel pad">
+        <div class="ph"><h2>Field feedback improves the hit rate</h2></div>
+        <div class="muted" style="font-size:.85rem">Share of top-<span id="kcap"></span> alerts that were real theft, on a holdout area the model never trains on (one training run per version).</div>
+        <div class="chartbox" id="vchart"></div>
+      </div>
+      <div class="panel pad">
+        <div class="ph"><h2>Drift monitor</h2><span class="chip" id="driftstatus"></span></div>
+        <div class="muted" style="font-size:.85rem">Population Stability Index, this month vs last. Above 0.25 triggers a review before the next retrain.</div>
+        <div class="chartbox" id="driftchart"></div>
+      </div>
+      <div class="panel wide">
+        <div class="pad" style="padding-bottom:6px"><div class="ph"><h2>Compared with simpler approaches</h2><span class="label" id="abl-k"></span></div></div>
+        <div class="tscroll"><table id="abl"></table></div>
+      </div>
+      <div class="panel pad">
+        <div class="ph"><h2>Model versions</h2><span id="retrainbox"></span></div>
+        <div class="muted" style="font-size:.8rem">A retrained model goes live only if it scores at least as well as the active one on field outcomes the active model never saw.</div>
+        <div class="tscroll"><table id="vtable"></table></div>
+        <div id="gatebox"></div>
+      </div>
+      <div class="panel pad">
+        <div class="ph"><h2>Meter data issues</h2><span class="label">Sent to metering, not vigilance</span></div>
+        <div class="muted" style="font-size:.85rem">Meters reported faulty by field officers, and consumers with more than 20% missing reads in the last 90 days. Gaps are imputed from peers, so they never count as theft on their own.</div>
+        <div class="tscroll" style="margin-top:8px"><table id="dqtable"></table></div>
+      </div>
+      <div class="panel pad wide" id="calpanel" hidden>
+        <div class="ph"><h2>Do risk scores mean what they say?</h2><span class="label" id="calnote"></span></div>
+        <div class="muted" style="font-size:.85rem">For each band of risk score, the share of consumers in the holdout area that were really stealing. A score of 80 should mean about 80% likely theft.</div>
+        <div class="tscroll" style="margin-top:8px"><table id="caltable"></table></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const EMBEDDED = /*__DATA__*/null;
+const LIVE = !EMBEDDED;
+let D, sel = null, selDT = null;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const nf = new Intl.NumberFormat("en-IN");
+const inr = x => x >= 1e5 ? `₹${(x / 1e5).toFixed(1)} lakh` : `₹${nf.format(Math.round(x))}`;
+const pct = (x, d = 0) => `${(100 * x).toFixed(d)}%`;
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const CAT = { RES: "Residential", COM: "Commercial", AGR: "Agricultural", IND: "Industrial" };
+const STATUS = { theft_confirmed: "Theft confirmed", no_irregularity: "No irregularity", meter_fault: "Meter fault" };
+
+function toast(msg) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; t.setAttribute("role", "status");
+  document.body.appendChild(t); setTimeout(() => t.remove(), Math.min(9000, 3200 + 35 * msg.length));
+}
+
+/* ---------- language of the reasons (field officers read Gujarati) ---------- */
+let LANG = (() => { try { return localStorage.getItem("vr-lang") === "gu" ? "gu" : "en"; } catch { return "en"; } })();
+const UI = {
+  en: { why: "Why it was flagged", outlier: "Overall consumption profile is a statistical outlier among peers", toggle: "ગુજરાતી" },
+  gu: { why: "શા માટે ફ્લેગ થયું", outlier: "સમાન ગ્રાહકોની સરખામણીએ કુલ વપરાશ પેટર્ન આંકડાકીય રીતે અસામાન્ય", toggle: "English" },
+};
+const T = k => UI[LANG][k];
+const reasonsOf = q => (LANG === "gu" && q.reasons_gu?.length ? q.reasons_gu : q.reasons) || [];
+function setLang(l) { LANG = l; try { localStorage.setItem("vr-lang", l); } catch {} renderAll(); }
+
+/* ---------- access: API key + role ---------- */
+// Roles mirror the API: viewer reads, vigilance also records outcomes, admin also retrains.
+const RANK = { viewer: 0, vigilance: 1, admin: 2 };
+let ROLE = "admin", OPEN = true, DEMO = false;
+const can = r => RANK[ROLE] >= RANK[r];
+const store = {
+  get(k, s = sessionStorage) { try { return s.getItem(k) || ""; } catch { return ""; } },
+  set(k, v, s = sessionStorage) { try { v ? s.setItem(k, v) : s.removeItem(k); } catch {} },
+};
+function askKey(msg = "") {
+  return new Promise(resolve => {
+    document.querySelector(".keybox")?.remove();
+    const box = document.createElement("div"); box.className = "keybox";
+    box.innerHTML = `<form><h2>Sign in</h2>
+      <div class="muted" style="font-size:.85rem">Enter the API key issued to you (viewer, vigilance or admin).</div>
+      <input type="password" autocomplete="current-password" aria-label="API key" required>
+      <div class="err">${esc(msg)}</div><button class="btn primary">Continue</button></form>`;
+    document.body.appendChild(box);
+    const inp = box.querySelector("input"); inp.focus();
+    box.querySelector("form").onsubmit = e => { e.preventDefault(); store.set("vr-key", inp.value.trim()); box.remove(); resolve(); };
+  });
+}
+async function api(path, opts = {}, tries = 0) {
+  const headers = { ...(opts.headers || {}) };
+  const key = store.get("vr-key");
+  if (key) headers["X-API-Key"] = key;
+  const r = await fetch(path, { ...opts, headers });
+  if (r.status === 401 && tries < 5) {
+    await askKey(key ? "That key was not accepted. Check it and try again." : "");
+    return api(path, opts, tries + 1);
+  }
+  return r;
+}
+async function apiJSON(path, opts) {
+  const r = await api(path, opts);
+  let j = {}; try { j = await r.json(); } catch {}
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+
+/* ---------- charts (hand-drawn SVG, one scale per chart) ---------- */
+function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+function lineChart({ series, labels, height = 190, yFmt = v => v, yMin = 0, refLine = null }) {
+  const W = 600, H = height, L = 44, R = 12, T = 10, B = 24;
+  const all = series.flatMap(s => s.values).filter(v => v != null);
+  const hiV = Math.max(...all, refLine ? refLine.value : 0) * 1.05;
+  const lo = Math.min(yMin, ...all);
+  const step = niceMax((hiV - Math.min(0, lo)) / 4);
+  const yLo = lo < 0 ? -Math.ceil(-lo / step) * step : 0;
+  const yMax = Math.max(step, Math.ceil(hiV / step) * step);
+  const n = labels.length;
+  const x = i => L + (W - L - R) * i / (n - 1);
+  const y = v => T + (H - T - B) * (1 - (v - yLo) / (yMax - yLo));
+  let g = "";
+  for (let v = yLo; v <= yMax + 1e-9; v += step) {
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/>`;
+    g += `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--f-mono)">${yFmt(v)}</text>`;
+  }
+  let lastM = -1;
+  labels.forEach((d, i) => {
+    const m = +d.slice(5, 7) - 1;
+    if (m !== lastM && i < n - 2) { lastM = m; g += `<text x="${x(i)}" y="${H - 6}" font-size="11" fill="var(--muted)">${MONTHS[m]}</text>`; }
+  });
+  if (refLine) {
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(refLine.value)}" y2="${y(refLine.value)}" stroke="var(--exp)" stroke-dasharray="2 4" stroke-width="1.5"/>`;
+    g += `<text x="${W - R}" y="${y(refLine.value) - 5}" text-anchor="end" font-size="11" fill="var(--muted)">${esc(refLine.label)}</text>`;
+  }
+  for (const s of series) {
+    let d = "", pen = false, lastPt = null;
+    s.values.forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; lastPt = [x(i), y(v)];
+    });
+    if (s.area) {
+      const idx = s.values.map((v, i) => v == null ? null : i).filter(i => i != null);
+      const a = `M${x(idx[0])},${y(yLo)}` + idx.map(i => `L${x(i).toFixed(1)},${y(s.values[i]).toFixed(1)}`).join("") + `L${x(idx[idx.length - 1])},${y(yLo)}Z`;
+      g += `<path d="${a}" fill="${s.color}" opacity=".12"/>`;
+    }
+    g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ""} stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (lastPt && s.dot) g += `<circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="3.5" fill="${s.color}"/>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
+}
+function riskColor(r) {
+  const lerp = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const [lo, md, hi] = [hex(css("--low")), hex(css("--med")), hex(css("--high"))];
+  const t = Math.max(0, Math.min(1, r / 100));
+  const c = t < .5 ? lerp(lo, md, t / .5) : lerp(md, hi, (t - .5) / .5);
+  return `rgb(${c.join(",")})`;
+}
+
+/* ---------- header + KPIs ---------- */
+function renderTop() {
+  const m = D.meta, k = D.kpis, h = k.holdout, hl = D.headline || {};
+  const asof = new Date(m.as_of);
+  $("#chips").innerHTML = `
+    <span class="chip">Reads to <b>${asof.getDate()} ${MONTHS[asof.getMonth()]} ${asof.getFullYear()}</b></span>
+    <span class="chip">Model <b>${esc(m.active_model)}</b> · ${nf.format(m.labels)} field outcomes</span>
+    ${LIVE && !OPEN ? `<button class="chip rolechip" id="rolechip" title="Switch key">Signed in: <b>${esc(ROLE)}</b></button>` : ""}
+    <button class="chip rolechip" id="langchip" title="Language of the alert reasons" lang="${LANG === "en" ? "gu" : "en"}">${T("toggle")}</button>
+    ${m.simulated === false ? "" : `<span class="chip sim">Simulated DISCOM data</span>`}`;
+  $("#langchip").onclick = () => setLang(LANG === "en" ? "gu" : "en");
+  $("#rolechip") && ($("#rolechip").onclick = async () => { store.set("vr-key", ""); await askKey(); await boot(); });
+  // Headline numbers come from one place (pipeline headline: holdout, 5-run average).
+  const hit = hl.hit_rate ?? h.precision_at_k, base = hl.base_rate ?? h.positives / h.n;
+  $("#kpis").innerHTML = `
+    <div class="kpi"><div class="label">High risk, not yet inspected</div><div class="v hi">${nf.format(k.high_uninspected)}</div><div class="n">of ${nf.format(k.consumers)} consumers on ${k.dts} DTs</div></div>
+    <div class="kpi"><div class="label">Revenue at risk</div><div class="v">${inr(k.revenue_at_risk_inr_month)}</div><div class="n">per month · ${nf.format(Math.round(k.leak_kwh_month_high))} kWh unbilled</div></div>
+    ${hl.hit_rate != null
+      ? `<div class="kpi" title="${esc(hl.basis || "")}"><div class="label">Inspection hit rate</div><div class="v">${pct(hit)}</div><div class="n">vs ${pct(base, 1)} for random checks</div></div>`
+      : `<div class="kpi" title="Cross-validated on past vigilance inspections"><div class="label">Hit rate on past inspections</div><div class="v">${pct(h.precision_at_k)}</div><div class="n">top ${h.k} of ${nf.format(h.n)} inspected, cross-validated</div></div>`}
+    <div class="kpi"><div class="label">Meter data issues</div><div class="v">${nf.format(k.data_issues)}</div><div class="n">routed to metering team</div></div>`;
+}
+
+/* ---------- queue ---------- */
+function filtered() {
+  const f = $("#f-feeder").value, b = $("#f-band").value, cap = Math.max(5, Math.min(150, +$("#f-cap").value || 25));
+  return D.queue.filter(q => (!f || q.feeder === f) && (!b || q.band === b)).slice(0, cap);
+}
+function renderQueue() {
+  const items = filtered();
+  if (!items.length) { $("#qlist").innerHTML = `<li class="empty">No consumers match these filters. Clear a filter to see the queue.</li>`; $("#detail").innerHTML = ""; return; }
+  $("#qlist").innerHTML = items.map((q, i) => {
+    const done = q.status !== "not_inspected";
+    const col = q.band === "High" ? "var(--high)" : q.band === "Medium" ? "var(--med)" : "var(--low)";
+    return `<li class="row" role="option" tabindex="0" data-id="${q.id}" aria-selected="${sel === q.id}">
+      <span class="rank">${i + 1}</span>
+      <div style="min-width:0">
+        <div class="rid"><span class="mono">${q.id}</span><span class="cat">${q.category}</span><span class="muted" style="font-size:.8rem">${q.dt} · ${q.feeder}</span></div>
+        <div class="rwhy">${esc(reasonsOf(q)[0] || T("outlier"))}</div>
+      </div>
+      <div class="score">${done ? `<span class="pill done">${STATUS[q.status]}</span>` : `<span class="pill ${q.band}">${q.band}</span>`}
+        <span class="meter"><i style="width:${q.score}%;background:${col}"></i></span></div>
+    </li>`;
+  }).join("");
+  if (!sel || !items.some(q => q.id === sel)) { sel = window.innerWidth > 900 ? items[0].id : null; }
+  renderDetail();
+}
+function renderDetail() {
+  const box = $("#detail");
+  document.querySelectorAll(".row").forEach(r => r.setAttribute("aria-selected", r.dataset.id === sel));
+  $(".scrim")?.remove();
+  if (!sel) { box.hidden = window.innerWidth <= 900; box.innerHTML = window.innerWidth > 900 ? `<div class="empty">Pick a consumer to see why it was flagged.</div>` : ""; return; }
+  box.hidden = false;
+  if (window.innerWidth <= 900) { const s = document.createElement("div"); s.className = "scrim"; s.onclick = () => { sel = null; renderDetail(); }; document.body.appendChild(s); }
+  const q = D.queue.find(x => x.id === sel), dt = D.dts.find(x => x.id === q.dt);
+  const done = q.status !== "not_inspected";
+  box.innerHTML = `
+    <div class="dhead">
+      <div style="min-width:0">
+        <div class="label">${CAT[q.category]} · ${q.sanctioned_kw} kW sanctioned</div>
+        <h2 class="mono" style="font-family:var(--f-mono);font-size:1.3rem;margin-top:2px">${q.id}</h2>
+        <div class="muted" style="font-size:.85rem">${q.dt} on ${q.feeder}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="big" style="color:${q.band === "High" ? "var(--high)" : q.band === "Medium" ? "var(--med)" : "var(--low)"}">${Math.round(q.score)}</div>
+        <div class="label">risk / 100</div>
+        <button class="btn close" id="closebtn" style="margin-top:6px">Close</button>
+      </div>
+    </div>
+    <div class="label" style="margin-top:14px">${T("why")}</div>
+    <ol class="reasons" lang="${LANG}">${(reasonsOf(q).length ? reasonsOf(q) : [T("outlier")]).map((r, i) => `<li><span>${i + 1}</span><span>${esc(r)}</span></li>`).join("")}</ol>
+    <div class="facts">
+      <div><div class="label">Unbilled est.</div><div class="v">${nf.format(Math.round(q.leak_kwh_month))} kWh/mo</div></div>
+      <div><div class="label">Revenue est.</div><div class="v">${inr(q.revenue_inr_month)}/mo</div></div>
+      <div><div class="label">Tamper alarms</div><div class="v">${q.tamper}</div></div>
+    </div>
+    <div class="chartbox">
+      <div class="label">Weekly average, kWh/day</div>
+      ${lineChart({ labels: D.meta.week_starts, yFmt: v => (v === 0 || v >= 10 || Number.isInteger(v)) ? v.toFixed(0) : v.toFixed(1), series: [
+        { values: q.expected, color: "var(--exp)", dash: "5 4", width: 1.6 },
+        { values: q.series, color: "var(--accent)", area: true, dot: true } ] })}
+      <div class="legend"><span><i style="background:var(--accent)"></i>Metered</span><span><i style="border-top:2px dashed var(--exp);height:0"></i>Expected from same-DT peers</span></div>
+    </div>
+    <div class="chartbox">
+      <div class="label">${q.dt} unaccounted energy, % of DT input</div>
+      ${lineChart({ labels: D.meta.week_starts, height: 150, yFmt: v => v.toFixed(0) + "%", series: [{ values: dt.loss_series, color: "var(--high)", width: 1.8, dot: true }],
+        refLine: { value: dt.loss_base, label: `baseline ${dt.loss_base.toFixed(1)}%` } })}
+    </div>
+    ${done ? `<p class="note">Inspection recorded: <b>${STATUS[q.status]}</b>. This outcome trains the next model version.</p>`
+      : !can("vigilance") ? `<p class="note">Your key can view alerts. Vigilance officers record inspection outcomes.</p>` : `
+    <div class="label" style="margin-top:16px">Record field inspection outcome</div>
+    <div class="ofield">
+      <input id="o-officer" placeholder="Officer name" maxlength="60" aria-label="Officer name" value="${esc(store.get("vr-officer", localStorage))}">
+      <input id="o-notes" placeholder="Notes (seal no., what was found)" maxlength="500" aria-label="Notes">
+    </div>
+    <div class="actions">
+      <button class="btn primary" data-out="theft_confirmed">Theft confirmed</button>
+      <button class="btn" data-out="no_irregularity">No irregularity</button>
+      <button class="btn" data-out="meter_fault">Meter fault</button>
+    </div>
+    <p class="note">${LIVE ? "Outcomes are saved to the vigilance log and used at the next retrain. A meter fault goes to the metering team, not vigilance." : "Demo copy: outcomes are kept on this page only. In the running system they are saved and used at the next retrain."}</p>`}`;
+  $("#closebtn").onclick = () => { sel = null; renderDetail(); };
+  box.querySelectorAll("[data-out]").forEach(b => b.onclick = () => recordOutcome(q, b.dataset.out));
+}
+async function recordOutcome(q, outcome) {
+  const officer = ($("#o-officer")?.value || "").trim(), notes = ($("#o-notes")?.value || "").trim();
+  store.set("vr-officer", officer, localStorage);
+  if (LIVE) {
+    try {
+      await apiJSON("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consumer_id: q.id, outcome, officer: officer || "field-team", notes }) });
+    } catch (e) { toast(`Could not save the outcome: ${e.message}`); return; }
+  }
+  q.status = outcome;
+  toast(`${q.id}: ${STATUS[outcome]} recorded`);
+  renderQueue();
+}
+
+/* ---------- areas ---------- */
+function renderAreas() {
+  const W = 640, H = 460, P = 30;
+  const lats = D.dts.map(d => d.lat), lngs = D.dts.map(d => d.lng);
+  const [a0, a1, o0, o1] = [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)];
+  const px = lng => P + (W - 2 * P) * (lng - o0) / (o1 - o0), py = lat => P + (H - 2 * P) * (1 - (lat - a0) / (a1 - a0));
+  const maxC = Math.max(...D.dts.map(d => d.consumers));
+  const hubs = {};
+  D.dts.forEach(d => { (hubs[d.feeder] ||= []).push(d); });
+  let g = "";
+  for (const [f, ds] of Object.entries(hubs)) {
+    const cx = ds.reduce((s, d) => s + px(d.lng), 0) / ds.length, cy = ds.reduce((s, d) => s + py(d.lat), 0) / ds.length;
+    ds.forEach(d => g += `<line x1="${cx}" y1="${cy}" x2="${px(d.lng)}" y2="${py(d.lat)}" stroke="var(--line)" stroke-width="1.4"/>`);
+    hubs[f].c = [cx, cy];
+  }
+  let hubG = "";
+  for (const [f, ds] of Object.entries(hubs)) {
+    const [cx, cy] = ds.c;
+    hubG += `<rect x="${cx - 6}" y="${cy - 6}" width="12" height="12" fill="var(--fg)" stroke="var(--surface)" stroke-width="2"/><text x="${cx + 10}" y="${cy + 4}" font-size="11.5" font-weight="500" font-family="var(--f-mono)" fill="var(--fg)" stroke="var(--surface)" stroke-width="3.5" paint-order="stroke">${f}</text>`;
+  }
+  [...D.dts].sort((a, b) => a.risk - b.risk).forEach(d => {
+    const r = 5 + 9 * Math.sqrt(d.consumers / maxC);
+    g += `<g class="dtnode${selDT === d.id ? " sel" : ""}" data-dt="${d.id}" tabindex="0"><circle cx="${px(d.lng)}" cy="${py(d.lat)}" r="${r}" fill="${riskColor(d.risk)}" fill-opacity=".9" stroke="var(--surface)" stroke-width="1.2"/><title>${d.id}: risk ${d.risk}, ${d.high} high-risk consumers</title></g>`;
+  });
+  $("#map").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Map of feeders and distribution transformers">${g}${hubG}</svg>`;
+  $("#grad").style.background = `linear-gradient(90deg, ${riskColor(0)}, ${riskColor(50)}, ${riskColor(100)})`;
+  $("#map").querySelectorAll(".dtnode").forEach(n => { n.onclick = () => { selDT = n.dataset.dt; renderAreas(); }; n.onkeydown = e => { if (e.key === "Enter") n.onclick(); }; });
+  if (!selDT) selDT = D.dts[0].id;
+  const d = D.dts.find(x => x.id === selDT);
+  const qs = D.queue.filter(q => q.dt === d.id).slice(0, 6);
+  $("#dtdetail").innerHTML = `
+    <div class="dhead"><div><div class="label">${d.feeder}${d.kva ? ` · ${d.kva} kVA` : ""}</div><h2 style="font-family:var(--f-mono);margin-top:2px">${d.id}</h2></div>
+      <div style="text-align:right"><div class="big" style="color:${riskColor(d.risk)}">${Math.round(d.risk)}</div><div class="label">DT risk</div></div></div>
+    <div class="facts">
+      <div><div class="label">Loss, baseline</div><div class="v">${d.loss_base.toFixed(1)}%</div></div>
+      <div><div class="label">Loss, last 90 days</div><div class="v" style="color:${d.loss_recent - d.loss_base > 3 ? "var(--high)" : "var(--fg)"}">${d.loss_recent.toFixed(1)}%</div></div>
+      <div><div class="label">Excess energy</div><div class="v">${nf.format(Math.round(d.excess_kwh_day))} kWh/day</div></div>
+    </div>
+    <div class="chartbox">${lineChart({ labels: D.meta.week_starts, height: 160, yFmt: v => v.toFixed(0) + "%", series: [{ values: d.loss_series, color: "var(--high)", width: 1.8, dot: true }], refLine: { value: d.loss_base, label: `baseline ${d.loss_base.toFixed(1)}%` } })}</div>
+    <div class="label" style="margin-top:12px">${d.high} high and ${d.medium} medium-risk consumers on this DT</div>
+    ${qs.length ? `<table style="margin-top:4px"><tbody>${qs.map(q => `<tr><td class="mono">${q.id}</td><td>${q.category}</td><td class="r"><span class="pill ${q.band}">${Math.round(q.score)}</span></td></tr>`).join("")}</tbody></table>
+      <button class="btn" style="margin-top:10px" id="dtqueue">Show in inspection queue</button>` : `<p class="muted">No consumers from this DT are in the current queue.</p>`}`;
+  $("#dtqueue") && ($("#dtqueue").onclick = () => { $("#f-feeder").value = d.feeder; $("#f-band").value = ""; sel = qs[0].id; location.hash = "queue"; route(); });
+  const fmax = Math.max(...D.feeders.map(f => f.excess_loss_pct));
+  $("#ftable").innerHTML = `<thead><tr><th>Feeder</th><th class="r">DTs</th><th class="r">Consumers</th><th class="r">High risk</th><th>Excess loss</th><th class="r">Avg DT risk</th></tr></thead><tbody>${
+    [...D.feeders].sort((a, b) => b.excess_loss_pct - a.excess_loss_pct).map(f => `<tr><td class="mono">${f.id}</td><td class="r">${f.dts}</td><td class="r">${nf.format(f.consumers)}</td><td class="r">${f.high}</td>
+    <td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1"><i style="width:${100 * f.excess_loss_pct / fmax}%"></i></div><span class="mono">${f.excess_loss_pct.toFixed(1)}%</span></div></td><td class="r">${f.risk}</td></tr>`).join("")}</tbody>`;
+}
+
+/* ---------- model ---------- */
+function renderModel() {
+  const vs = D.models, h = D.kpis.holdout, random = h.positives / h.n;
+  $("#kcap").textContent = D.meta.capacity_k;
+  const hv = vs.filter(v => v.metrics.eval === "holdout");
+  const W = 600, H = 220, L = 44, B = 40, T = 14, bw = Math.min(64, (W - L - 140) / hv.length - 20);
+  const y = v => T + (H - T - B) * (1 - v);
+  let g = "";
+  [0, .25, .5, .75, 1].forEach(v => g += `<line x1="${L}" x2="${W - 10}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" font-size="11" text-anchor="end" fill="var(--muted)" font-family="var(--f-mono)">${v * 100}%</text>`);
+  hv.forEach((v, i) => {
+    const cx = L + 130 + (i + .5) * (W - L - 140) / hv.length, p = v.metrics.precision_at_k;
+    g += `<rect x="${cx - bw / 2}" y="${y(p)}" width="${bw}" height="${y(0) - y(p)}" rx="3" fill="${i === hv.length - 1 ? "var(--accent)" : "var(--accent-weak)"}"/>`;
+    g += `<text x="${cx}" y="${y(p) - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)" font-family="var(--f-mono)">${pct(p)}</text>`;
+    g += `<text x="${cx}" y="${H - 22}" text-anchor="middle" font-size="12" fill="var(--fg)" font-family="var(--f-mono)">${v.version}</text>`;
+    g += `<text x="${cx}" y="${H - 7}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${v.n_labels} labels</text>`;
+  });
+  g += `<line x1="${L}" x2="${W - 10}" y1="${y(random)}" y2="${y(random)}" stroke="var(--high)" stroke-dasharray="4 4"/><text x="${L + 6}" y="${y(random) - 5}" font-size="11" fill="var(--high)">random checks ${pct(random, 1)}</text>`;
+  $("#vchart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Hit rate by model version">${g}</svg>`;
+
+  const dr = D.drift.features || [];
+  const st = D.drift.status || "stable";
+  $("#driftstatus").textContent = st === "stable" ? "Stable" : "Needs review";
+  $("#driftstatus").style.color = st === "stable" ? "var(--low)" : "var(--med)";
+  const dmax = Math.max(.3, ...dr.map(d => d.psi));
+  const rowH = 22, DW = 600, DL = 150, DH = dr.length * rowH + 24;
+  const dx = v => DL + (DW - DL - 46) * v / dmax;
+  let dg = "";
+  [[.1, "0.1"], [.25, "0.25"]].forEach(([v, t]) => dg += `<line x1="${dx(v)}" x2="${dx(v)}" y1="0" y2="${DH - 18}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${dx(v)}" y="${DH - 4}" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="var(--f-mono)">${t}</text>`);
+  const NAMES = { peer_ratio_change: "Use vs peers", cp_drop_ratio: "Sustained drop", cp_weeks_ago: "Drop timing", low_day_frac: "Low-read days", flatness_change: "Flatness", cap_frac: "Capping", missing_frac: "Missing reads", tamper_events: "Tamper alarms", load_utilisation: "Load utilisation", dt_loss_rise: "DT loss rise", dt_step_at_drop: "DT step at drop", dt_step_match: "DT step match", anomaly_score: "Anomaly score" };
+  dr.forEach((d, i) => {
+    const yy = i * rowH + 4;
+    dg += `<text x="${DL - 8}" y="${yy + 12}" text-anchor="end" font-size="11.5" fill="var(--fg)">${NAMES[d.feature] || d.feature}</text>`;
+    dg += `<rect x="${DL}" y="${yy + 3}" width="${Math.max(1, dx(d.psi) - DL)}" height="12" rx="2" fill="${d.psi >= .25 ? "var(--high)" : d.psi >= .1 ? "var(--med)" : "var(--accent)"}"/>`;
+    dg += `<text x="${dx(d.psi) + 5}" y="${yy + 13}" font-size="11" fill="var(--muted)" font-family="var(--f-mono)">${d.psi.toFixed(2)}</text>`;
+  });
+  $("#driftchart").innerHTML = `<svg viewBox="0 0 ${DW} ${DH}" role="img" aria-label="Feature drift">${dg}</svg>`;
+
+  const A = D.ablation || [];
+  $("#abl-k").textContent = A.length ? `Top ${A[0].k} alerts, holdout area of ${nf.format(A[0].n)} consumers, ML rows averaged over 5 training runs` : "";
+  const ds0 = A.find(a => a.drop_slice)?.drop_slice;
+  $("#abl").innerHTML = `<thead><tr><th>Approach</th><th class="r">Hit rate</th><th class="r">Thefts caught</th><th class="r">Visits to vacant / solar homes</th><th class="r">Lift vs random</th>${ds0 ? `<th class="r" title="Consumers whose use fell more than 25%: ${ds0.thefts} thefts among ${ds0.legit} vacant or rooftop-solar homes. This is where the DT energy balance matters.">Use fell &gt;25%: vacant / solar in top ${ds0.k}</th>` : ""}</tr></thead><tbody>${
+    A.map((a, i) => `<tr class="${i === A.length - 1 ? "best" : ""}"><td>${esc(a.approach)}</td><td class="r">${pct(a.precision_at_k)}</td><td class="r">${pct(a.recall_at_k)}</td><td class="r">${a.legit_drop_false_alarms_at_k.toFixed(0)} of ${a.k}</td><td class="r">${a.lift_vs_random.toFixed(1)}×</td>${a.drop_slice ? `<td class="r">${a.drop_slice.legit_in_top.toFixed(0)}</td>` : ""}</tr>`).join("")}</tbody>`;
+
+  const pillFor = s => s === "active" ? `<span class="pill Low">Active</span>` : s === "candidate" ? `<span class="pill cand">Candidate</span>` : "";
+  $("#vtable").innerHTML = `<thead><tr><th>Version</th><th>Trained on</th><th class="r">PR-AUC</th><th>Status</th></tr></thead><tbody>${
+    [...vs].reverse().map(v => `<tr title="${esc(v.gate?.reason || "")}"><td class="mono">${v.version}</td><td>${esc(v.note)}</td><td class="r">${v.metrics.pr_auc.toFixed(2)}<span class="muted" style="font-size:.72rem"> ${v.metrics.eval === "cv" ? "cv" : ""}</span></td><td>${pillFor(v.status || (v.version === D.meta.active_model ? "active" : ""))}</td></tr>`).join("")}</tbody>`;
+  const lastGate = [...vs].reverse().find(v => v.gate)?.gate;
+  $("#gatebox").innerHTML = lastGate ? `<div class="gate"><b>Last promotion check:</b> ${esc(lastGate.reason)}</div>` : "";
+  $("#retrainbox").innerHTML = !LIVE ? `<span class="label">Retraining runs in the live system</span>` : !can("admin") ? "" :
+    `${DEMO ? `<button class="btn" id="fieldround" title="Demo only: inspect the top 60 of the queue and record their simulated outcomes">Simulate a field round</button> ` : ""}<button class="btn primary" id="retrain">Retrain on new outcomes</button>`;
+  $("#fieldround") && ($("#fieldround").onclick = async () => {
+    $("#fieldround").disabled = true; $("#fieldround").textContent = "Inspecting…";
+    try {
+      const j = await apiJSON("/api/demo/field-round?n=60", { method: "POST" });
+      toast(`Field round recorded: ${j.recorded} inspections, ${j.thefts} thefts confirmed`);
+      await load(); renderAll();
+    } catch (e) { toast(`Could not record the field round: ${e.message}`); $("#fieldround").disabled = false; $("#fieldround").textContent = "Simulate a field round"; }
+  });
+  $("#retrain") && ($("#retrain").onclick = async () => {
+    $("#retrain").disabled = true; $("#retrain").textContent = "Retraining…";
+    try {
+      const j = await apiJSON("/api/retrain", { method: "POST" });
+      toast(j.promoted ? `Model ${j.version} promoted. ${j.reason}` : `${j.version} saved as a candidate. ${j.reason}`);
+      await load(); renderAll();
+    } catch (e) { toast(`Retraining failed: ${e.message}`); $("#retrain").disabled = false; $("#retrain").textContent = "Retrain on new outcomes"; }
+  });
+
+  const cal = D.calibration;
+  $("#calpanel").hidden = !cal;
+  if (cal) {
+    $("#calnote").textContent = `Brier score ${cal.brier.toFixed(4)} (a flat base-rate guess scores ${cal.brier_base_rate.toFixed(4)}; lower is better)`;
+    const bar = (v, color) => `<div class="bar" style="flex:1"><i style="width:${(100 * v).toFixed(1)}%;background:${color}"></i></div>`;
+    $("#caltable").innerHTML = `<thead><tr><th>Risk score</th><th class="r">Consumers</th><th>Model said</th><th>Actually stealing</th></tr></thead><tbody>${
+      cal.bins.map(b => `<tr><td class="mono">${Math.round(100 * b.from)}–${Math.round(100 * b.to)}</td><td class="r">${nf.format(b.n)}</td>
+        <td><div style="display:flex;gap:8px;align-items:center">${bar(b.predicted, "var(--exp)")}<span class="mono" style="min-width:3.2em;text-align:right">${pct(b.predicted)}</span></div></td>
+        <td><div style="display:flex;gap:8px;align-items:center">${bar(b.observed, "var(--accent)")}<span class="mono" style="min-width:3.2em;text-align:right">${pct(b.observed)}</span></div></td></tr>`).join("")}</tbody>`;
+  }
+
+  $("#dqtable").innerHTML = D.data_quality.length ? `<thead><tr><th>Consumer</th><th>DT</th><th class="r">Issue</th><th class="r">Theft risk</th></tr></thead><tbody>${
+    D.data_quality.slice(0, 8).map(q => `<tr><td class="mono">${q.id}</td><td class="mono">${q.dt}</td><td class="r">${q.field_fault ? "Fault reported in field" : `${q.missing_pct}% reads missing`}</td><td class="r">${Math.round(q.score)}</td></tr>`).join("")}</tbody>` : `<tbody><tr><td class="muted">No meters with major gaps.</td></tr></tbody>`;
+}
+
+/* ---------- routing ---------- */
+const VIEWS = ["queue", "areas", "model"];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "queue";
+  VIEWS.forEach(x => { $("#v-" + x).hidden = x !== v; $("#t-" + x).setAttribute("aria-selected", x === v); });
+  if (v === "queue") renderQueue(); else if (v === "areas") renderAreas(); else renderModel();
+}
+function renderAll() { renderTop(); route(); }
+async function load() { D = EMBEDDED || await apiJSON("/api/dashboard"); }
+async function boot() {
+  if (LIVE) { const w = await apiJSON("/api/whoami"); ROLE = w.role; OPEN = w.open_mode; DEMO = w.demo_tools; }
+  await load();
+  const fsel = $("#f-feeder"), keep = fsel.value;
+  fsel.innerHTML = `<option value="">All</option>` + [...new Set(D.queue.map(q => q.feeder))].sort().map(f => `<option>${f}</option>`).join("");
+  fsel.value = keep;
+  renderAll();
+}
+
+/* Route sheet for field teams: today's list, grouped by feeder and DT. Built
+   in the browser from the queue, so it also works in the offline copy. */
+function downloadList() {
+  const rows = filtered().slice().sort((a, b) => a.feeder.localeCompare(b.feeder) || a.dt.localeCompare(b.dt) || b.score - a.score);
+  const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const head = ["Feeder", "DT", "Consumer", "Category", "Risk", "Band", "Reason 1", "Reason 2", "Reason 3", "Outcome", "Officer", "Notes"];
+  const csv = [head, ...rows.map(q => [q.feeder, q.dt, q.id, CAT[q.category], Math.round(q.score), q.band, ...[0, 1, 2].map(i => reasonsOf(q)[i] || ""), "", "", ""])]
+    .map(r => r.map(cell).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `inspection_list_${D.meta.as_of}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => { location.hash = t.dataset.view; });
+window.addEventListener("hashchange", route);
+["f-feeder", "f-band", "f-cap"].forEach(id => $("#" + id).addEventListener("change", () => { sel = null; renderQueue(); }));
+$("#qlist").addEventListener("click", e => { const r = e.target.closest(".row"); if (r) { sel = r.dataset.id; renderDetail(); } });
+$("#qlist").addEventListener("keydown", e => { const r = e.target.closest(".row"); if (r && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); sel = r.dataset.id; renderDetail(); } });
+let lastW = window.innerWidth;
+window.addEventListener("resize", () => { if ((lastW > 900) !== (window.innerWidth > 900)) { lastW = window.innerWidth; renderDetail(); } });
+
+$("#dl-list").onclick = downloadList;
+boot().catch(e => { document.querySelector(".wrap").insertAdjacentHTML("beforeend", `<p class="empty">Could not load dashboard data (${esc(e.message)}). Start the API with <span class="mono">uvicorn vidyutrakshak.api:app</span> and reload.</p>`); });
+</script>
