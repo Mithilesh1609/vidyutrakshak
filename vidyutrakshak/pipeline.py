@@ -1,8 +1,14 @@
 """End-to-end pipeline: data -> features -> models -> feedback rounds ->
 scores -> dashboard export.
 
-    python -m vidyutrakshak.pipeline            # reuse data/ if present
-    python -m vidyutrakshak.pipeline --fresh    # regenerate synthetic data
+    python -m vidyutrakshak.pipeline            # build if nothing is built yet, otherwise
+                                                # rescore with the active model (never deletes)
+    python -m vidyutrakshak.pipeline --rebuild  # retrain v1.. from scratch, keep live field outcomes
+    python -m vidyutrakshak.pipeline --fresh    # demo reset: regenerate synthetic data, models, feedback
+
+--rebuild and --fresh build the new registry in a staging folder and swap it
+in only once it loads; the previous registry and live outcomes are kept in
+`<models>.prev/`.
 
 Real data: write it with `python -m vidyutrakshak.ingest ... --out DIR`, then
     VR_DATA_DIR=DIR python -m vidyutrakshak.pipeline
@@ -48,20 +54,80 @@ def _weekly(v: np.ndarray) -> list[float]:
     return [None if np.isnan(x) else round(float(x), 2) for x in m]
 
 
-def run(fresh: bool = False, verbose: bool = True) -> dict:
+LIVE = "inspections_live.csv"
+
+
+# ---------------------------------------------------------------- safe file state
+def atomic_write_text(path: Path, text: str) -> None:
+    """Write via a temp file + rename, so a reader never sees half a file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def atomic_csv(df: pd.DataFrame, path: Path) -> None:
+    atomic_write_text(path, df.to_csv(index=False))
+
+
+def load_inspections(ds: fx.Dataset) -> pd.DataFrame:
+    """All outcomes so far: the live log (initial records + field outcomes)
+    when there is one, otherwise the initial vigilance records."""
+    live = DATA / LIVE
+    return pd.read_csv(live) if live.exists() else ds.inspections.copy()
+
+
+def _field_rows(insp: pd.DataFrame) -> pd.DataFrame:
+    return insp[insp.source == "field_feedback"] if "source" in insp else insp.iloc[:0]
+
+
+def _staging() -> Path:
+    st = MODELS.with_name(MODELS.name + ".staging")
+    if st.exists():
+        shutil.rmtree(st)           # left over from an interrupted build: never live
+    return st
+
+
+def _swap_in(staging: Path) -> Registry:
+    """Make a fully built registry live. The old registry and the live
+    outcome log are moved to <models>.prev/ rather than deleted."""
+    Registry(staging).load()        # refuse to publish a registry that cannot load
+    prev = MODELS.with_name(MODELS.name + ".prev")
+    if MODELS.exists() or (DATA / LIVE).exists():
+        if prev.exists():
+            shutil.rmtree(prev)
+        if MODELS.exists():
+            os.replace(MODELS, prev)
+        prev.mkdir(parents=True, exist_ok=True)
+        if (DATA / LIVE).exists():
+            shutil.copy2(DATA / LIVE, prev / LIVE)
+    os.replace(staging, MODELS)
+    return Registry(MODELS)
+
+
+def _is_built() -> bool:
+    return (MODELS / "registry.json").exists()
+
+
+def run(fresh: bool = False, verbose: bool = True, rebuild: bool = False) -> dict:
+    """Default: build only when nothing is built; otherwise rescore with the
+    active model and the live outcomes (non-destructive). rebuild=True
+    retrains from scratch keeping live field outcomes; fresh=True resets the
+    simulated demo (new data, v1..v4, no live outcomes)."""
     log = print if verbose else (lambda *a, **k: None)
     meta_path = DATA / "meta.json"
     is_real = meta_path.exists() and json.loads(meta_path.read_text()).get("simulated") is False
     if fresh and is_real:
         raise SystemExit(f"{DATA} holds real (ingested) data; --fresh would overwrite it with simulated data.")
+    if not fresh and not rebuild and meta_path.exists() and _is_built():
+        return refresh(log)
     if fresh or not meta_path.exists():
         log("• simulating DISCOM data …")
         simulate(SimConfig(), DATA)
     if not (DATA / "_ground_truth.csv").exists():
         return run_real(log)
-    if MODELS.exists():
-        shutil.rmtree(MODELS)
-    reg = Registry(MODELS)
+    staging = _staging()
+    reg = Registry(staging)
 
     ds = fx.load(DATA)
     F, ctx = fx.build_features(ds)
@@ -116,7 +182,6 @@ def run(fresh: bool = False, verbose: bool = True) -> dict:
             "outcome": np.where(gtl.loc[picked].to_numpy() == 1, "theft_confirmed", "no_irregularity"),
             "source": "model_queue", "round": r + 1,
         })], ignore_index=True)
-    insp.to_csv(DATA / "inspections_live.csv", index=False)
 
     # ---------- ablation on the holdout area, final labels, 5 seeds ----------
     def avg(runs: list[dict]) -> dict:
@@ -153,6 +218,16 @@ def run(fresh: bool = False, verbose: bool = True) -> dict:
     log("• calibration (holdout): " + ", ".join(f"{b['predicted']:.2f}->{b['observed']:.2f} (n={b['n']})"
                                                  for b in calibration["bins"]) + f", Brier {calibration['brier']:.4f}")
 
+    # Field outcomes recorded in the console are real work: a rebuild keeps
+    # them (after the ablation, so the evaluation stays clean). They count as
+    # new outcomes for the promotion gate at the next retrain.
+    if rebuild and not fresh and (DATA / LIVE).exists():
+        field = _field_rows(pd.read_csv(DATA / LIVE))
+        if len(field):
+            insp = pd.concat([insp, field], ignore_index=True)
+            log(f"• kept {len(field)} field outcome(s) from the live log")
+    reg = _swap_in(staging)
+    atomic_csv(insp, DATA / LIVE)
     out = publish_state(F, ctx, ds, reg, insp, extras={
         "ablation": ablation, "drift": {"features": drift, **drift_summary}, "capacity_k": k_hold,
         "calibration": calibration})
@@ -183,14 +258,14 @@ def _drift(ds: fx.Dataset, F: pd.DataFrame, m: dict) -> tuple[list[dict], dict]:
 def run_real(log=print) -> dict:
     """Real (ingested) data: no ground truth, so no holdout or simulated
     feedback rounds. Train on the vigilance records, measure quality by
-    cross-validation on them, score everyone and publish the console."""
-    if MODELS.exists():
-        shutil.rmtree(MODELS)
-    reg = Registry(MODELS)
+    cross-validation on them, score everyone and publish the console.
+    Live outcomes recorded in the console are always kept."""
+    staging = _staging()
+    reg = Registry(staging)
     ds = fx.load(DATA)
     F, ctx = fx.build_features(ds)
     F = add_anomaly_score(F)
-    insp = ds.inspections.copy()
+    insp = load_inspections(ds)
     L = F.merge(insp.drop_duplicates("consumer_id", keep="last"), on="consumer_id")
     n_pos, n_neg = int((L.outcome == "theft_confirmed").sum()), int((L.outcome != "theft_confirmed").sum())
     if n_pos < 10 or n_neg < 10:
@@ -203,12 +278,41 @@ def run_real(log=print) -> dict:
     log(f"• trained on {len(L)} inspections ({n_pos} thefts): cross-validated PR-AUC {met['pr_auc']:.2f}, "
         f"top-{k} hit rate {met['precision_at_k']:.2f}")
     drift, drift_summary = _drift(ds, F, reg.load())
-    insp.to_csv(DATA / "inspections_live.csv", index=False)
+    reg = _swap_in(staging)
+    atomic_csv(insp, DATA / LIVE)
     out = publish_state(F, ctx, ds, reg, insp, extras={
         "ablation": [], "drift": {"features": drift, **drift_summary},
         "capacity_k": max(10, int(CAPACITY_SHARE * len(F))), "calibration": None})
     log(f"• scored {out['kpis']['consumers']:,} consumers: {out['kpis']['high']} high, {out['kpis']['medium']} medium, "
         f"{out['kpis']['data_issues']} data issues")
+    return out
+
+
+def saved_extras() -> dict:
+    """Evaluation results from the last build (ablation, calibration, ...),
+    which a rescore keeps rather than recomputes."""
+    d = json.loads(DASH.read_text()) if DASH.exists() else {}
+    return {"ablation": d.get("ablation", []), "drift": d.get("drift", {}),
+            "capacity_k": d.get("meta", {}).get("capacity_k"), "calibration": d.get("calibration")}
+
+
+def refresh(log=print) -> dict:
+    """Non-destructive: rescore everyone with the active model and the live
+    outcomes, republish the console. Models and outcomes are untouched."""
+    reg = Registry(MODELS)
+    ds = fx.load(DATA)
+    F, ctx = fx.build_features(ds)
+    F = add_anomaly_score(F)
+    insp = load_inspections(ds)
+    extras = saved_extras()
+    if extras["capacity_k"] is None:
+        extras["capacity_k"] = max(10, int(CAPACITY_SHARE * len(F)))
+    drift, drift_summary = _drift(ds, F, reg.load())
+    extras["drift"] = {"features": drift, **drift_summary}
+    out = publish_state(F, ctx, ds, reg, insp, extras)
+    log(f"• models already built: rescored {out['kpis']['consumers']:,} consumers with active "
+        f"{out['meta']['active_model']} and {out['meta']['labels']} outcomes (nothing deleted). "
+        f"Use --rebuild to retrain from scratch, or --fresh to reset the demo.")
     return out
 
 
@@ -262,13 +366,32 @@ def _with_layout(dts: pd.DataFrame) -> pd.DataFrame:
 
 def publish_state(F, ctx, ds, reg: Registry, insp: pd.DataFrame, extras: dict) -> dict:
     """Score everyone with the active model and write scores + dashboard JSON."""
-    m = reg.load()
-    S = score(m, F)
+    out, S, dt = build_state(F, ctx, ds, reg, insp, extras)
+    write_state(out, S, dt)
+    return out
+
+
+def write_state(out: dict, S: pd.DataFrame, dt: pd.DataFrame) -> None:
+    """Persist scores, area scores and the console payload, each atomically."""
+    atomic_csv(S.assign(reasons=S.reasons.map(" | ".join), reasons_gu=S.reasons_gu.map(" | ".join)), DATA / "scores.csv")
+    atomic_csv(dt, DATA / "dt_scores.csv")
+    atomic_write_text(DASH, json.dumps(out, default=float))
+
+
+def build_state(F, ctx, ds, reg: Registry, insp: pd.DataFrame, extras: dict,
+                raw: pd.DataFrame | None = None) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
+    """Console payload + scored frame + DT scores, in memory.
+
+    `raw` is the active model's scoring (score(m, F)). Pass it to skip
+    rescoring when only the outcomes changed (e.g. after a field outcome);
+    inspection status, queue and KPIs are always recomputed from `insp`.
+    """
+    if raw is None:
+        raw = score(reg.load(), F)
+    S = raw.copy()
     last = insp.drop_duplicates("consumer_id", keep="last").set_index("consumer_id")
     S["inspection_status"] = S.consumer_id.map(last.outcome).fillna("not_inspected")
     dt, fd = area_scores(S, ctx, _with_layout(ds.dts))
-    S.assign(reasons=S.reasons.map(" | ".join), reasons_gu=S.reasons_gu.map(" | ".join)).to_csv(DATA / "scores.csv", index=False)
-    dt.to_csv(DATA / "dt_scores.csv", index=False)
 
     dates = ctx["dates"]
     week_starts = [dates[i] for i in range(0, len(dates) // 7 * 7, 7)]
@@ -278,7 +401,8 @@ def publish_state(F, ctx, ds, reg: Registry, insp: pd.DataFrame, extras: dict) -
     faulty = set(insp.consumer_id[insp["recorded_outcome"].eq("meter_fault")]) if "recorded_outcome" in insp else set()
     S["meter_fault_reported"] = S.consumer_id.isin(faulty)
     dq = pd.concat([S[S.meter_fault_reported], S[S.data_issue & ~S.meter_fault_reported].nlargest(25, "missing_frac")])
-    versions = reg.list()["versions"]
+    listing = reg.list()
+    versions = listing["versions"]
     eval_metrics = next((v["metrics"] for v in reversed(versions) if v["metrics"].get("eval") == "holdout"),
                         versions[-1]["metrics"])
     headline = _headline(extras.get("ablation", []), versions)
@@ -299,7 +423,7 @@ def publish_state(F, ctx, ds, reg: Registry, insp: pd.DataFrame, extras: dict) -
     outcomes = insp.drop_duplicates("consumer_id", keep="last")
     out = {
         "meta": {**json.loads((DATA / "meta.json").read_text()), "as_of": dates[-1],
-                 "active_model": m["version"], "week_starts": week_starts,
+                 "active_model": listing["active"], "week_starts": week_starts,
                  "capacity_k": extras.get("capacity_k"),
                  "labels": int(len(outcomes)), "confirmed_theft": int((outcomes.outcome == "theft_confirmed").sum())},
         "kpis": {
@@ -332,12 +456,15 @@ def publish_state(F, ctx, ds, reg: Registry, insp: pd.DataFrame, extras: dict) -
         "drift": extras.get("drift", {}),
         "calibration": extras.get("calibration"),
     }
-    DASH.parent.mkdir(parents=True, exist_ok=True)
-    DASH.write_text(json.dumps(out, default=float))
-    return out
+    return out, S, dt
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fresh", action="store_true", help="regenerate synthetic data")
-    run(ap.parse_args().fresh)
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--fresh", action="store_true",
+                   help="demo reset: regenerate synthetic data, retrain v1.., clear live outcomes")
+    g.add_argument("--rebuild", action="store_true",
+                   help="retrain from scratch on the current data, keeping live field outcomes")
+    a = ap.parse_args()
+    run(fresh=a.fresh, rebuild=a.rebuild)

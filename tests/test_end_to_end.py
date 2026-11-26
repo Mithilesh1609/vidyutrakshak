@@ -123,3 +123,60 @@ def test_access_control(dash, monkeypatch):
         assert c.post("/api/retrain", headers={"X-API-Key": "v1g"}).status_code == 403
         # Demo shortcuts don't exist once real keys are configured.
         assert c.post("/api/demo/field-round", headers={"X-API-Key": "adm"}).status_code == 404
+
+
+def test_feedback_is_visible_immediately_and_after_restart(dash):
+    """A recorded outcome must leave the queue and move the KPIs at once,
+    and stay that way after a page reload or an API restart."""
+    from vidyutrakshak.api import app
+    from vidyutrakshak.pipeline import DASH
+    with TestClient(app) as c:
+        before = c.get("/api/dashboard").json()
+        top = before["queue"][0]
+        cid = top["id"]
+        assert c.post("/api/feedback", json={"consumer_id": cid, "outcome": "theft_confirmed"}).json()["saved"]
+        assert cid not in {i["consumer_id"] for i in c.get("/api/queue?capacity=1000").json()["items"]}
+        assert c.get(f"/api/consumers/{cid}").json()["inspection_status"] == "theft_confirmed"
+        after = c.get("/api/dashboard").json()
+        assert cid not in {q["id"] for q in after["queue"]}
+        assert after["meta"]["labels"] == before["meta"]["labels"] + 1
+        assert after["meta"]["confirmed_theft"] == before["meta"]["confirmed_theft"] + 1
+        if top["band"] == "High":
+            assert after["kpis"]["high_uninspected"] == before["kpis"]["high_uninspected"] - 1
+    assert cid not in {q["id"] for q in json.loads(DASH.read_text())["queue"]}
+    with TestClient(app) as c:  # restart: state is reloaded from disk
+        assert cid not in {i["consumer_id"] for i in c.get("/api/queue?capacity=1000").json()["items"]}
+
+
+def test_api_refuses_to_start_without_artifacts(dash, tmp_path, monkeypatch):
+    """Startup must never train or wipe anything implicitly."""
+    from vidyutrakshak import api
+    monkeypatch.setattr(api, "MODELS", tmp_path / "models")
+    monkeypatch.delenv("VR_AUTO_BUILD", raising=False)
+    with pytest.raises(RuntimeError, match="python -m vidyutrakshak.pipeline"):
+        api._load_state()
+    assert not (tmp_path / "models").exists()
+
+
+def test_rerunning_the_pipeline_is_non_destructive(dash):
+    """A plain rerun keeps the registry and live outcomes; --rebuild keeps the
+    live field outcomes and parks the old registry in models.prev/."""
+    from vidyutrakshak import pipeline as P
+    reg_path, live_path = P.MODELS / "registry.json", P.DATA / P.LIVE
+    reg_before = json.loads(reg_path.read_text())
+    live_before = pd.read_csv(live_path)
+    n_field = int((live_before.source == "field_feedback").sum())
+    assert n_field > 0 and len(reg_before["versions"]) > 4   # earlier tests recorded outcomes and retrained
+
+    out = P.run(verbose=False)
+    assert json.loads(reg_path.read_text()) == reg_before
+    assert len(pd.read_csv(live_path)) == len(live_before)
+    assert out["meta"]["active_model"] == reg_before["active"]
+
+    P.run(rebuild=True, verbose=False)
+    assert int((pd.read_csv(live_path).source == "field_feedback").sum()) == n_field
+    assert [v["version"] for v in json.loads(reg_path.read_text())["versions"]] == ["v1", "v2", "v3", "v4"]
+    prev = P.MODELS.with_name(P.MODELS.name + ".prev")
+    assert json.loads((prev / "registry.json").read_text()) == reg_before
+    assert len(pd.read_csv(prev / P.LIVE)) == len(live_before)
+    assert not P.MODELS.with_name(P.MODELS.name + ".staging").exists()

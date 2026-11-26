@@ -8,6 +8,9 @@ __pycache__/
 data/
 data_*/
 models/
+models*.prev/
+models*.staging/
+.*.tmp
 models_*/
 secure/
 
@@ -20,3 +23,6 @@ deck/node_modules/
 # Demo videos: large and out of date
 dist/*.mp4
 dist/*_narration.txt
+
+# Video build intermediates (scripts/demo_video/make_video.py regenerates them)
+dist/_video_build/

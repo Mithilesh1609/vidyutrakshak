@@ -4,6 +4,7 @@ file-based model registry for the inspection-feedback retraining loop."""
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -265,6 +266,12 @@ class Registry:
     def _read(self) -> dict:
         return json.loads(self.index.read_text()) if self.index.exists() else {"active": None, "versions": []}
 
+    def _write(self, reg: dict) -> None:
+        # temp file + rename: a reader never sees a half-written index
+        tmp = self.index.with_name(f".registry.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(reg, indent=2))
+        os.replace(tmp, self.index)
+
     def save(self, m: dict, metrics: dict, note: str, activate: bool = True,
              trained_on_rows: int | None = None, gate: dict | None = None) -> str:
         """Store a version. With activate=False it is kept as a candidate and
@@ -283,7 +290,7 @@ class Registry:
                                                      "metrics", "trained_on_rows", "gate")})
         if activate or reg["active"] is None:
             reg["active"] = v
-        self.index.write_text(json.dumps(reg, indent=2))
+        self._write(reg)
         return v
 
     def set_active(self, version: str) -> None:
@@ -291,7 +298,7 @@ class Registry:
         if version not in [x["version"] for x in reg["versions"]]:
             raise KeyError(version)
         reg["active"] = version
-        self.index.write_text(json.dumps(reg, indent=2))
+        self._write(reg)
 
     def card(self, version: str | None = None) -> dict:
         v = version or self._read()["active"]

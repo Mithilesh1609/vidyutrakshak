@@ -24,6 +24,17 @@ scripts/demo_reset.sh                       # simulate, train v1..v4, serve http
 Or step by step: `python -m vidyutrakshak.pipeline --fresh`, then
 `uvicorn vidyutrakshak.api:app --port 8000`. With Docker: `docker compose up --build`.
 
+| Command | Effect on models and recorded outcomes |
+|---|---|
+| `python -m vidyutrakshak.pipeline` | Builds if nothing is built; otherwise rescores with the active model. Deletes nothing. |
+| `... --rebuild` | Retrains v1.. from scratch; keeps live field outcomes. |
+| `... --fresh` | Demo reset: new simulated data, v1..v4, no live outcomes. |
+
+`--rebuild` and `--fresh` build in a staging folder and swap in only a registry that loads; the previous
+registry and outcome log are kept in `models.prev/`. The API never trains on startup: it serves the built
+artifacts and asks you to run the pipeline if they are missing (`VR_AUTO_BUILD=1` builds them instead).
+A recorded outcome updates the queue, KPIs and files immediately. State is file-based: run one worker.
+
 Tests: `pytest -q` (10 tests: quality bars, calibration, promotion gate, every API
 route, access roles, ingest and pseudonymisation, Gujarati reasons). Tests run in
 their own temporary folders and never change the demo state.

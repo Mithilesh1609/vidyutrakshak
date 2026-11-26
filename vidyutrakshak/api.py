@@ -23,7 +23,6 @@ retrain and switch models. With no keys set the API runs in open demo mode.
 """
 from __future__ import annotations
 
-import json
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -38,9 +37,13 @@ from pydantic import BaseModel, Field
 from sklearn.metrics import average_precision_score
 
 from . import features as fx
-from .model import FEATURES, Registry, add_anomaly_score, cv_oof, eval_ranking, predict, train
-from .pipeline import DASH, DATA, MODELS, STATIC, publish_state, run
+from .model import FEATURES, Registry, add_anomaly_score, cv_oof, eval_ranking, predict, score, train
+from .pipeline import (DASH, DATA, LIVE, MODELS, STATIC, atomic_csv, build_state, load_inspections, run,
+                       saved_extras, write_state)
 
+# One process holds the state. Writes take the lock and swap in a complete new
+# snapshot (STATE.update); reads take one reference to STATE["S"] / ["dash"]
+# and never see a half-updated view. Run a single worker while state is file-based.
 _lock = threading.Lock()
 STATE: dict = {}
 
@@ -67,15 +70,33 @@ def require(role: str):
 
 
 def _load_state():
+    """Load prebuilt artifacts. Never trains or deletes anything unless
+    VR_AUTO_BUILD=1, and even then only builds what is missing."""
     if not DASH.exists() or not (MODELS / "registry.json").exists():
+        if os.getenv("VR_AUTO_BUILD") != "1":
+            raise RuntimeError(
+                f"No trained models or console data found (models: {MODELS}, console data: {DASH}). "
+                "Build them first with `python -m vidyutrakshak.pipeline` "
+                "(or `scripts/demo_reset.sh`), or set VR_AUTO_BUILD=1 to build on startup.")
         run(verbose=False)
     ds = fx.load(DATA)
     F, ctx = fx.build_features(ds)
     F = add_anomaly_score(F)
-    live = DATA / "inspections_live.csv"
-    insp = pd.read_csv(live) if live.exists() else ds.inspections.copy()
-    STATE.update(ds=ds, F=F, ctx=ctx, insp=insp, reg=Registry(MODELS),
-                 dash=json.loads(DASH.read_text()))
+    reg = Registry(MODELS)
+    STATE.update(ds=ds, F=F, ctx=ctx, reg=reg, extras=saved_extras())
+    # Rescore once with the active model and republish, so files on disk
+    # match the live outcome log even if they were written by an older run.
+    _publish(load_inspections(ds), raw=score(reg.load(), F))
+
+
+def _publish(insp: pd.DataFrame, raw: pd.DataFrame | None = None) -> None:
+    """Rebuild queue, KPIs and area scores from `insp`, persist them, then
+    swap the new snapshot in. raw=None rescores with the active model (after
+    a model change); pass the cached scoring when only outcomes changed."""
+    raw = score(STATE["reg"].load(), STATE["F"]) if raw is None else raw
+    out, S, dt = build_state(STATE["F"], STATE["ctx"], STATE["ds"], STATE["reg"], insp, STATE["extras"], raw)
+    write_state(out, S, dt)
+    STATE.update(insp=insp, raw=raw, S=S, dash=out)
 
 
 @asynccontextmanager
@@ -88,18 +109,9 @@ app = FastAPI(title="VidyutRakshak", version="0.1.0", lifespan=lifespan,
               description="Explainable electricity-theft risk scoring for DISCOMs")
 
 
-def _extras() -> dict:
-    d = STATE["dash"]
-    return {"ablation": d.get("ablation", []), "drift": d.get("drift", {}),
-            "capacity_k": d["meta"].get("capacity_k"), "calibration": d.get("calibration")}
-
-
 def _scores() -> pd.DataFrame:
-    return pd.read_csv(DATA / "scores.csv")
-
-
-def _split(s) -> list[str]:
-    return [x for x in str(s).split(" | ") if x and x != "nan"]
+    """The current scored frame (in memory; reasons are lists)."""
+    return STATE["S"]
 
 
 # ------------------------------------------------------------------ reads
@@ -142,8 +154,7 @@ def queue(capacity: int = 50, feeder: str | None = None, dt: str | None = None,
             "est_leak_kwh_month", "est_revenue_inr_month", "data_issue"]
     out = S[cols].to_dict(orient="records")
     for r in out:
-        r["reasons"] = _split(r["reasons"])
-        r["reasons_gu"] = _split(r["reasons_gu"])
+        r["reasons"], r["reasons_gu"] = list(r["reasons"]), list(r["reasons_gu"])
     return {"capacity": capacity, "count": len(out), "items": out}
 
 
@@ -178,7 +189,7 @@ def consumer(cid: str, _=Depends(require("viewer"))):
     return {
         "consumer_id": cid, "dt_id": r.dt_id, "feeder_id": r.feeder_id, "category": r.category,
         "risk_score": float(r.risk_score), "band": r.band,
-        "reasons": _split(r.reasons), "reasons_gu": _split(r.reasons_gu),
+        "reasons": list(r.reasons), "reasons_gu": list(r.reasons_gu),
         "inspection_status": r.inspection_status, "data_issue": bool(r.data_issue),
         "features": {f: float(r[f]) for f in FEATURES},
         "estimates": {"leak_kwh_month": float(r.est_leak_kwh_month),
@@ -236,9 +247,12 @@ def feedback(fb: Feedback, role=Depends(require("vigilance"))):
                "source": "field_feedback", "round": rnd,
                "recorded_outcome": fb.outcome, "officer": fb.officer, "notes": fb.notes,
                "recorded_at": datetime.now().isoformat(timespec="seconds")}
-        STATE["insp"] = pd.concat([insp, pd.DataFrame([row])], ignore_index=True)
-        STATE["insp"].to_csv(DATA / "inspections_live.csv", index=False)
-        pending = int((STATE["insp"].source == "field_feedback").sum())
+        insp = pd.concat([insp, pd.DataFrame([row])], ignore_index=True)
+        atomic_csv(insp, DATA / LIVE)
+        # Same model, new outcome: no rescoring, but the queue, inspection
+        # status and KPIs reflect it immediately (and after a reload/restart).
+        _publish(insp, raw=STATE["raw"])
+        pending = int((insp.source == "field_feedback").sum())
     return {"saved": True, "consumer_id": fb.consumer_id, "outcome": fb.outcome,
             "feedback_since_start": pending}
 
@@ -294,7 +308,8 @@ def retrain(_=Depends(require("admin"))):
         m = train(F, insp, FEATURES)
         v = reg.save(m, met, f"retrained on {len(L)} field outcomes", activate=gate["promoted"],
                      trained_on_rows=len(insp), gate=gate)
-        STATE["dash"] = publish_state(F, STATE["ctx"], STATE["ds"], reg, insp, _extras())
+        # Rescore only if the live model changed; a candidate just joins the list.
+        _publish(insp, raw=None if gate["promoted"] else STATE["raw"])
     return {"version": v, "promoted": gate["promoted"], "reason": gate["reason"], "gate": gate,
             "labels": int(len(L)), "positives": int(L.y.sum()), "cv_pr_auc": round(met["pr_auc"], 3),
             "active": STATE["dash"]["meta"]["active_model"]}
@@ -308,7 +323,7 @@ def activate(version: str, _=Depends(require("admin"))):
             reg.set_active(version)
         except KeyError:
             raise HTTPException(404, f"No model version {version}.")
-        STATE["dash"] = publish_state(STATE["F"], STATE["ctx"], STATE["ds"], reg, STATE["insp"], _extras())
+        _publish(STATE["insp"])
     return {"active": version}
 
 
@@ -338,7 +353,7 @@ def demo_field_round(n: int = 60, _=Depends(require("admin"))):
             "officer": "demo-field-round", "notes": "", "recorded_at": datetime.now().isoformat(timespec="seconds"),
         })
         rows["recorded_outcome"] = rows.outcome
-        STATE["insp"] = pd.concat([insp, rows], ignore_index=True)
-        STATE["insp"].to_csv(DATA / "inspections_live.csv", index=False)
-        STATE["dash"] = publish_state(STATE["F"], STATE["ctx"], STATE["ds"], STATE["reg"], STATE["insp"], _extras())
+        insp = pd.concat([insp, rows], ignore_index=True)
+        atomic_csv(insp, DATA / LIVE)
+        _publish(insp, raw=STATE["raw"])
     return {"recorded": int(len(rows)), "thefts": int((rows.outcome == "theft_confirmed").sum())}
