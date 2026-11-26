@@ -39,6 +39,10 @@ Tests: `pytest -q` (10 tests: quality bars, calibration, promotion gate, every A
 route, access roles, ingest and pseudonymisation, Gujarati reasons). Tests run in
 their own temporary folders and never change the demo state.
 
+Demo video: `.venv/bin/python scripts/demo_video/make_video.py` (with the demo server running) records the
+console, narrates it with a Piper voice and cuts in the deck slides; output in `dist/`. Run
+`scripts/demo_reset.sh` afterwards. Set `VR_VIDEO_URL` when building the deck to put the video link on slide 3.
+
 Live demo: [docs/demo_run_sheet.md](docs/demo_run_sheet.md). Jury questions:
 [docs/jury_qa.md](docs/jury_qa.md). Offline console (no server):
 `dist/vidyutrakshak_console.html`.
@@ -152,7 +156,7 @@ vidyutrakshak/
   api.py        FastAPI service: roles, promotion gate, route sheet
 static/index.html     inspector console (served at /)
 scripts/              demo_reset.sh, build_static_dashboard.py, validate_sgcc.py,
-                      stress_test.py, benchmark.py
+                      stress_test.py, benchmark.py, demo_video/make_video.py
 deck/build_deck.js    synopsis deck + appendix, numbers read from the outputs above
 docs/                 evidence JSON, jury Q&A, demo run sheet
 tests/                end-to-end, gate, roles, ingest tests

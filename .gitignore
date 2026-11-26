@@ -20,9 +20,8 @@ external/
 # Deck build packages (npm install in deck/)
 deck/node_modules/
 
-# Demo videos: large and out of date
+# Demo videos: large; rebuild with scripts/demo_video/make_video.py
 dist/*.mp4
-dist/*_narration.txt
 
 # Video build intermediates (scripts/demo_video/make_video.py regenerates them)
 dist/_video_build/
