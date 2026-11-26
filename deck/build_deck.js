@@ -57,7 +57,7 @@ async function icon(Comp, color, size = 256) {
   const pres = new pptxgen();
   pres.layout = "LAYOUT_16x9"; // 10 x 5.625 in
   pres.title = "VidyutRakshak – SFIC 2026 Synopsis (PS000205)";
-  pres.author = "Smit Thakkar";
+  pres.author = "Mithilesh Thakkar";
   pres.company = "Workloop Studios";
   pres.theme = { headFontFace: THEME.headFontFace, bodyFontFace: THEME.bodyFontFace };
   const C = pres.SchemeColor;
@@ -141,7 +141,7 @@ async function icon(Comp, color, size = 256) {
     ["TEAM ID", "TM005200"],
     ["TRACK CATEGORY", "Grassroots Innovator"],
     ["INSTITUTION / ORGANIZATION", "Workloop Studios, Gandhinagar, Gujarat"],
-    ["TEAM LEADER", "Smit Thakkar"],
+    ["TEAM LEADER", "Mithilesh Thakkar"],
   ];
   const fx = [0.5, 2.15, 4.15, 7.35], fw = [1.5, 1.85, 3.05, 2.15];
   s.addShape(pres.shapes.LINE, { x: 0.5, y: 3.85, w: 9.0, h: 0, line: { color: HEX.dk2, width: 1 }, objectName: "strip divider" });
@@ -219,7 +219,7 @@ async function icon(Comp, color, size = 256) {
   s.addImage({ data: I.play, x: 0.5, y: 4.82, w: 0.26, h: 0.26, objectName: "video icon" });
   s.addText([
     { text: "Demonstration video:  ", options: { bold: true } },
-    { text: "[add YouTube / Google Drive link]", options: { color: HEX.accent2 } },
+    { text: process.env.VR_VIDEO_URL || "shown live in this session", options: { color: process.env.VR_VIDEO_URL ? HEX.accent1 : C.text1 } },
   ], { x: 0.85, y: 4.82, w: 4.3, h: 0.26, fontSize: 10, color: C.text1, margin: 0, valign: "middle", isTextBox: true });
 
   // =====================================================================
@@ -365,29 +365,29 @@ async function icon(Comp, color, size = 256) {
   // Slide 8 — Team
   pres.addSection({ title: "Team" });
   s = pres.addSlide({ masterName: "CLOSING", sectionTitle: "Team" });
-  head(s, "SQUAD CAPABILITIES", "Multi-Disciplinary Team & Mentorship", "Complementary Skill Sets");
-  const team = [
-    ["TL", "Smit Thakkar", "Team Leader", "ML systems, backend & MLOps · Founder, Workloop Studios", I.user],
-    ["M2", "[Member 2 Name]", "Data & ML", "Feature engineering, model evaluation", I.userM],
-    ["M3", "[Member 3 Name]", "Product & field app", "Console, Gujarati UX, officer workflow", I.userM],
-    ["M4", "[Member 4 Name]", "Power systems", "Energy audit, DT metering, theft patterns", I.userM],
+  head(s, "TEAM", "One Builder, End to End", "Solo entry · no mentor");
+  // founder card
+  card(s, 0.5, 1.35, 3.3, 2.75, HEX.dk2, "founder card");
+  circleIcon(s, I.user, 0.72, 1.55, 0.72, HEX.accent1, "founder");
+  s.addText("Mithilesh Thakkar", { x: 0.72, y: 2.42, w: 2.95, h: 0.36, fontSize: 16, bold: true, color: C.background1, margin: 0, isTextBox: true });
+  s.addText("Team Leader · sole member", { x: 0.72, y: 2.78, w: 2.95, h: 0.26, fontSize: 11, bold: true, color: C.accent6, margin: 0, isTextBox: true });
+  s.addText("Founder, Workloop Studios, Gandhinagar. ML systems, backend and MLOps.", { x: 0.72, y: 3.1, w: 2.95, h: 0.8, fontSize: 10.5, color: C.background2, margin: 0, valign: "top", isTextBox: true });
+  // what was built
+  const work = [
+    ["Data & ML", "Peer comparison, DT energy balance, LightGBM, calibration, TreeSHAP reasons"],
+    ["Backend & MLOps", "FastAPI service, roles, gated retrain, versioned models, ingest with pseudonyms"],
+    ["Console & field UX", "Ranked queue, Gujarati reasons, route-sheet download, outcome capture"],
+    ["Evidence", "SGCC real-data check, 6 stress tests, 1-lakh-consumer benchmark, 10 automated tests"],
   ];
-  team.forEach(([tag, name, role, skill, ic], i) => {
-    const x = 0.5 + i * 2.29;
-    card(s, x, 1.35, 2.13, 2.45, HEX.dk2, `member ${tag}`);
-    circleIcon(s, ic, x + 0.18, 1.52, 0.62, i === 0 ? HEX.accent1 : HEX.accent5, `member ${tag}`);
-    s.addText(tag, { x: x + 1.4, y: 1.55, w: 0.55, h: 0.3, fontSize: 11, bold: true, color: C.accent6, align: "right", margin: 0, isTextBox: true });
-    s.addText(name, { x: x + 0.18, y: 2.28, w: 1.85, h: 0.32, fontSize: 13, bold: true, color: C.background1, margin: 0, isTextBox: true });
-    s.addText(role, { x: x + 0.18, y: 2.6, w: 1.85, h: 0.26, fontSize: 10.5, bold: true, color: C.accent6, margin: 0, isTextBox: true });
-    s.addText(skill, { x: x + 0.18, y: 2.9, w: 1.85, h: 0.8, fontSize: 10, color: C.background2, margin: 0, valign: "top", isTextBox: true });
+  work.forEach(([h, t], i) => {
+    const x = 4.05 + (i % 2) * 2.75, y = 1.35 + Math.floor(i / 2) * 1.4;
+    card(s, x, y, 2.6, 1.3, HEX.dk2, `built ${h}`);
+    s.addText(h, { x: x + 0.16, y: y + 0.12, w: 2.3, h: 0.28, fontSize: 12, bold: true, color: C.accent6, margin: 0, isTextBox: true });
+    s.addText(t, { x: x + 0.16, y: y + 0.43, w: 2.3, h: 0.8, fontSize: 10, color: C.background2, margin: 0, valign: "top", isTextBox: true });
   });
-  s.addImage({ data: I.chalk, x: 0.5, y: 4.05, w: 0.38, h: 0.38, objectName: "mentor icon" });
-  s.addText([
-    { text: "Faculty Mentor: ", options: { bold: true } },
-    { text: "[Prof. / Dr. Full Name]", options: {} },
-  ], { x: 1.0, y: 4.02, w: 5.5, h: 0.24, fontSize: 12, color: C.background1, margin: 0, isTextBox: true });
-  s.addText("Department of Electrical Engineering, [Institution Name]", { x: 1.0, y: 4.27, w: 5.5, h: 0.22, fontSize: 10.5, color: C.accent6, margin: 0, isTextBox: true });
-  s.addText("Ready for Jury Review & Evaluation", { x: 5.6, y: 4.08, w: 3.9, h: 0.4, fontSize: 15, bold: true, color: C.accent6, align: "right", margin: 0, isTextBox: true });
+  s.addText("For the pilot: a GUVNL nodal engineer for weekly reviews, and vigilance officers to check the Gujarati wording.",
+    { x: 0.5, y: 4.3, w: 5.6, h: 0.45, fontSize: 10.5, color: C.background1, margin: 0, valign: "top", isTextBox: true });
+  s.addText("Ready for Jury Review & Evaluation", { x: 6.1, y: 4.3, w: 3.4, h: 0.4, fontSize: 15, bold: true, color: C.accent6, align: "right", margin: 0, isTextBox: true });
 
   // =====================================================================
   // Appendix — evidence for jury questions

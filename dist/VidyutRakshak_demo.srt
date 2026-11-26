@@ -1,0 +1,176 @@
+1
+00:00:00,000 --> 00:00:07,680
+VidyutRakshak: explainable AI for electricity theft detection, built for GUVNL under the Seva First Innovation Challenge.
+
+2
+00:00:08,280 --> 00:00:12,664
+Meter bypass, tampering and direct hooking hide among lakhs of consumers.
+
+3
+00:00:12,664 --> 00:00:19,029
+Inspections are picked from bill scrutiny and tip-offs, so only about five in a hundred visits find theft.
+
+4
+00:00:19,029 --> 00:00:26,056
+And simple rules that flag a big drop in consumption mostly send inspectors to vacant houses and rooftop solar homes.
+
+5
+00:00:26,656 --> 00:00:32,415
+VidyutRakshak compares every consumer, every day, with peers on the same transformer and tariff.
+
+6
+00:00:32,415 --> 00:00:35,535
+Then it checks the transformer's own energy balance.
+
+7
+00:00:35,535 --> 00:00:37,094
+Theft makes energy vanish.
+
+8
+00:00:37,094 --> 00:00:38,474
+A vacant home does not.
+
+9
+00:00:38,474 --> 00:00:43,213
+Every alert comes with reasons, and every inspection outcome teaches the model.
+
+10
+00:00:43,823 --> 00:00:53,146
+It runs on data GUVNL already has: smart-meter reads, billing and transformer meters, on a single CPU server, with open-source software only.
+
+11
+00:00:53,757 --> 00:00:58,934
+Here is the working console, on a simulated network of 5,000 consumers.
+
+12
+00:00:58,934 --> 00:01:04,840
+76 high-risk consumers are not yet inspected, with about ₹60,000 a month at risk.
+
+13
+00:01:04,840 --> 00:01:10,163
+85% of the top alerts are real theft, against under 5% for random checks.
+
+14
+00:01:10,791 --> 00:01:11,956
+Take the top alert.
+
+15
+00:01:11,956 --> 00:01:15,023
+Three reasons, each a number an officer can check.
+
+16
+00:01:15,023 --> 00:01:19,316
+Consumption fell 23% against commercial peers on the same transformer.
+
+17
+00:01:19,316 --> 00:01:21,094
+Usage is pinned at a ceiling.
+
+18
+00:01:21,094 --> 00:01:23,118
+And there were two tamper alarms.
+
+19
+00:01:23,118 --> 00:01:27,227
+The chart shows the metered reading against what the peers suggest.
+
+20
+00:01:27,858 --> 00:01:31,906
+Field officers can read the same reasons in Gujarati, with one click.
+
+21
+00:01:31,906 --> 00:01:37,187
+And today's inspection list downloads as a route sheet, grouped by feeder and transformer.
+
+22
+00:01:37,792 --> 00:01:39,650
+The transformer view.
+
+23
+00:01:39,650 --> 00:01:46,993
+DT-002's losses rose from 4.3% to almost 15%, and here are the consumers behind it.
+
+24
+00:01:47,626 --> 00:01:48,722
+How good is it?
+
+25
+00:01:48,722 --> 00:01:55,733
+A rule that flags any drop above 50% sends inspectors to 53 vacant or solar homes in its top 71.
+
+26
+00:01:55,733 --> 00:01:57,924
+VidyutRakshak sends them to 6.
+
+27
+00:01:57,924 --> 00:02:04,351
+Where consumption fell, the transformer balance cuts those wasted visits by another 19%.
+
+28
+00:02:04,960 --> 00:02:07,308
+And the scores mean what they say.
+
+29
+00:02:07,308 --> 00:02:12,211
+On a holdout area, 96% of consumers scored 80–100 were really stealing.
+
+30
+00:02:12,827 --> 00:02:18,632
+When an officer inspects a consumer, the outcome goes into the vigilance log, with the officer's name.
+
+31
+00:02:21,327 --> 00:02:22,067
+Now retrain.
+
+32
+00:02:22,067 --> 00:02:29,216
+One new outcome is not enough evidence, so the promotion gate keeps v4 live, and saves the new model as a candidate.
+
+33
+00:02:29,827 --> 00:02:37,190
+After a field round of 60 inspections, the new model is compared with v4, on outcomes v4 never saw.
+
+34
+00:02:37,190 --> 00:02:39,496
+It holds up, so it is promoted.
+
+35
+00:02:39,496 --> 00:02:42,099
+An admin can roll back at any time.
+
+36
+00:02:42,727 --> 00:02:51,577
+We also tested the meter-data path on real, public theft data: 42,000 consumers from the SGCC dataset.
+
+37
+00:02:51,577 --> 00:02:57,130
+The top 4% of alerts are 40% thieves, against an 8.5% base rate.
+
+38
+00:02:57,730 --> 00:03:05,694
+It holds up under stress: theft that began before the data starts, transformers with no meters, and mapping errors.
+
+39
+00:03:05,694 --> 00:03:08,394
+The hit rate stays between 81% and 86%.
+
+40
+00:03:08,394 --> 00:03:11,303
+Subtle bypass is the hardest case, at 73%.
+
+41
+00:03:11,903 --> 00:03:16,350
+And it scales: 1 lakh consumers are scored in 15 seconds on a laptop.
+
+42
+00:03:16,950 --> 00:03:22,213
+Explainable, in Gujarati, on-premise, with pseudonymised data and no licence fees.
+
+43
+00:03:22,213 --> 00:03:26,256
+VidyutRakshak is ready for a one-sub-division pilot with GUVNL.
+
+44
+00:03:26,856 --> 00:03:27,390
+Thank you.
+

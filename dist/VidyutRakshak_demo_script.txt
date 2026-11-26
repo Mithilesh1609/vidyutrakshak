@@ -1,0 +1,53 @@
+[slide 1]
+VidyutRakshak: explainable AI for electricity theft detection, built for GUVNL under the Seva First Innovation Challenge.
+
+[slide 2]
+Meter bypass, tampering and direct hooking hide among lakhs of consumers. Inspections are picked from bill scrutiny and tip-offs, so only about five in a hundred visits find theft. And simple rules that flag a big drop in consumption mostly send inspectors to vacant houses and rooftop solar homes.
+
+[slide 3]
+VidyutRakshak compares every consumer, every day, with peers on the same transformer and tariff. Then it checks the transformer's own energy balance. Theft makes energy vanish. A vacant home does not. Every alert comes with reasons, and every inspection outcome teaches the model.
+
+[slide 4]
+It runs on data GUVNL already has: smart-meter reads, billing and transformer meters, on a single CPU server, with open-source software only.
+
+[console: kpis]
+Here is the working console, on a simulated network of 5,000 consumers. 76 high-risk consumers are not yet inspected, with about ₹60,000 a month at risk. 85% of the top alerts are real theft, against under 5% for random checks.
+
+[console: detail]
+Take the top alert. Three reasons, each a number an officer can check. Consumption fell 23% against commercial peers on the same transformer. Usage is pinned at a ceiling. And there were two tamper alarms. The chart shows the metered reading against what the peers suggest.
+
+[console: gujarati]
+Field officers can read the same reasons in Gujarati, with one click. And today's inspection list downloads as a route sheet, grouped by feeder and transformer.
+
+[console: areas]
+The transformer view. DT-002's losses rose from 4.3% to almost 15%, and here are the consumers behind it.
+
+[console: ablation]
+How good is it? A rule that flags any drop above 50% sends inspectors to 53 vacant or solar homes in its top 71. VidyutRakshak sends them to 6. Where consumption fell, the transformer balance cuts those wasted visits by another 19%.
+
+[console: calibration]
+And the scores mean what they say. On a holdout area, 96% of consumers scored 80–100 were really stealing.
+
+[console: outcome]
+When an officer inspects a consumer, the outcome goes into the vigilance log, with the officer's name.
+
+[console: retrain1]
+Now retrain. One new outcome is not enough evidence, so the promotion gate keeps v4 live, and saves the new model as a candidate.
+
+[console: retrain2]
+After a field round of 60 inspections, the new model is compared with v4, on outcomes v4 never saw. It holds up, so it is promoted. An admin can roll back at any time.
+
+[slide 9]
+We also tested the meter-data path on real, public theft data: 42,000 consumers from the SGCC dataset. The top 4% of alerts are 40% thieves, against an 8.5% base rate.
+
+[slide 10]
+It holds up under stress: theft that began before the data starts, transformers with no meters, and mapping errors. The hit rate stays between 81% and 86%. Subtle bypass is the hardest case, at 73%.
+
+[slide 12]
+And it scales: 1 lakh consumers are scored in 15 seconds on a laptop.
+
+[slide 7]
+Explainable, in Gujarati, on-premise, with pseudonymised data and no licence fees. VidyutRakshak is ready for a one-sub-division pilot with GUVNL.
+
+[slide 8]
+Thank you.
