@@ -169,6 +169,41 @@ td.r, th.r { text-align: right }
 .rolechip { cursor: pointer }
 .toolbar .btn { margin-left: auto; padding: 6px 10px }
 @media (prefers-reduced-motion: no-preference) { .row, .tab, .btn { transition: background .12s, color .12s } }
+.toolbar .dl { margin-left: auto; display: flex; gap: 8px }
+.toolbar .dl .btn { margin-left: 0 }
+.dactions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px }
+.vbar { display: flex; justify-content: flex-end; margin: -6px 0 12px }
+
+/* assistant */
+.chatfab { position: fixed; right: max(18px, env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  display: flex; align-items: center; gap: 8px; border-radius: 999px; padding: 11px 16px; box-shadow: 0 6px 20px rgba(0,0,0,.18) }
+.chatbox { position: fixed; right: max(18px, env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 31;
+  width: min(420px, calc(100vw - 36px)); height: min(620px, calc(100vh - 36px)); display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 48px rgba(0,0,0,.25); overflow: hidden }
+.chatbox[hidden], .chatfab[hidden] { display: none }
+.chead { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line) }
+.chead h2 { font-size: 1rem; margin: 0; flex: 1 }
+.cmode { font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line) }
+.cmode.ai { background: var(--accent-weak); color: var(--accent); border-color: transparent }
+.cmsgs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px }
+.msg { max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: .88rem; white-space: pre-wrap; overflow-wrap: anywhere }
+.msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px }
+.msg.bot { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px }
+.msg.bot a { color: var(--accent); font-family: var(--f-mono); font-size: .85em; cursor: pointer; text-decoration: underline; text-underline-offset: 2px }
+.msg.typing { color: var(--muted); font-style: italic }
+.csugg { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px }
+.csugg button { font-size: .75rem; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted) }
+.csugg button:hover { color: var(--fg); background: var(--surface-2) }
+.cform { display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line) }
+.cform input { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; color: inherit }
+
+@media print {
+  body { background: #fff }
+  .top, .kpis, .tabs, #v-areas, #v-model, .qgrid > .panel:first-child, .chatfab, .chatbox, .toast, .scrim,
+  .detail .actions, .detail .ofield, .detail .dactions, .detail .close, .detail .note { display: none !important }
+  .qgrid { display: block }
+  .detail { position: static !important; box-shadow: none !important; max-height: none !important; border: 0 }
+}
 </style>
 
 <div class="wrap">
@@ -201,7 +236,10 @@ td.r, th.r { text-align: right }
           <label for="f-feeder">Feeder <select id="f-feeder"><option value="">All</option></select></label>
           <label for="f-band">Risk <select id="f-band"><option value="">All</option><option>High</option><option>Medium</option></select></label>
           <label for="f-cap">Inspections today <input id="f-cap" type="number" min="5" max="150" step="5" value="25"></label>
-          <button class="btn" id="dl-list" type="button" title="Route sheet for field teams, sorted by feeder and DT">Download list</button>
+          <span class="dl">
+            <button class="btn" id="dl-list" type="button" title="Route sheet for field teams, sorted by feeder and DT (opens in Excel)">Download list</button>
+            <button class="btn" id="dl-route" type="button" title="Printable route sheet with reasons and outcome boxes" hidden>Route sheet (PDF)</button>
+          </span>
         </div>
         <ol class="list" id="qlist"></ol>
       </div>
@@ -225,6 +263,7 @@ td.r, th.r { text-align: right }
   </section>
 
   <section id="v-model" class="view" hidden>
+    <div class="vbar"><button class="btn" id="dl-model" type="button" hidden>Model explainability summary (PDF)</button></div>
     <div class="mgrid">
       <div class="panel pad">
         <div class="ph"><h2>Field feedback improves the hit rate</h2></div>
@@ -260,6 +299,19 @@ td.r, th.r { text-align: right }
   </section>
 </div>
 
+<button class="btn primary chatfab" id="chatfab" type="button" hidden aria-haspopup="dialog">
+  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+  <span id="chatfab-t">Ask VidyutRakshak</span>
+</button>
+<section class="chatbox" id="chatbox" role="dialog" aria-labelledby="chat-h" hidden>
+  <div class="chead"><h2 id="chat-h">Assistant</h2><span class="cmode" id="cmode"></span>
+    <button class="btn" id="chatclear" type="button" style="padding:4px 8px">Clear</button>
+    <button class="btn" id="chatclose" type="button" style="padding:4px 8px" aria-label="Close assistant">✕</button></div>
+  <div class="cmsgs" id="cmsgs" aria-live="polite"></div>
+  <div class="csugg" id="csugg"></div>
+  <form class="cform" id="cform"><input id="cin" maxlength="1000" autocomplete="off" aria-label="Your question"><button class="btn primary">Ask</button></form>
+</section>
+
 <script>
 const EMBEDDED = /*__DATA__*/null;
 const LIVE = !EMBEDDED;
@@ -283,8 +335,14 @@ function toast(msg) {
 /* ---------- language of the reasons (field officers read Gujarati) ---------- */
 let LANG = (() => { try { return localStorage.getItem("vr-lang") === "gu" ? "gu" : "en"; } catch { return "en"; } })();
 const UI = {
-  en: { why: "Why it was flagged", outlier: "Overall consumption profile is a statistical outlier among peers", toggle: "ગુજરાતી" },
-  gu: { why: "શા માટે ફ્લેગ થયું", outlier: "સમાન ગ્રાહકોની સરખામણીએ કુલ વપરાશ પેટર્ન આંકડાકીય રીતે અસામાન્ય", toggle: "English" },
+  en: { why: "Why it was flagged", outlier: "Overall consumption profile is a statistical outlier among peers", toggle: "ગુજરાતી",
+        ask: "Ask VidyutRakshak", ph: "Ask about a consumer, DT, feeder or metric…", report: "Case report (PDF)",
+        hello: "Ask me about the risk scores: why a consumer was flagged, the riskiest consumers on a feeder, transformer losses, or what a metric means.",
+        sugg: ["Top 10 risky consumers on FDR-05", "Which DT has the highest loss?", "How much revenue is at risk?", "What does hit rate mean?", "How good is the model?"] },
+  gu: { why: "શા માટે ફ્લેગ થયું", outlier: "સમાન ગ્રાહકોની સરખામણીએ કુલ વપરાશ પેટર્ન આંકડાકીય રીતે અસામાન્ય", toggle: "English",
+        ask: "VidyutRakshak ને પૂછો", ph: "ગ્રાહક, DT, ફીડર કે મેટ્રિક વિશે પૂછો…", report: "કેસ રિપોર્ટ (PDF)",
+        hello: "જોખમ સ્કોર વિશે પૂછો: ગ્રાહક શા માટે ફ્લેગ થયો, ફીડર પરના સૌથી જોખમી ગ્રાહકો, ટ્રાન્સફોર્મર નુકસાન, કે કોઈ મેટ્રિકનો અર્થ.",
+        sugg: ["FDR-05 પર ટોચના 10 જોખમી ગ્રાહકો", "કયા DT પર સૌથી વધુ નુકસાન છે?", "હિટ રેટ એટલે શું?"] },
 };
 const T = k => UI[LANG][k];
 const reasonsOf = q => (LANG === "gu" && q.reasons_gu?.length ? q.reasons_gu : q.reasons) || [];
@@ -458,6 +516,8 @@ function renderDetail() {
       <div><div class="label">Revenue est.</div><div class="v">${inr(q.revenue_inr_month)}/mo</div></div>
       <div><div class="label">Tamper alarms</div><div class="v">${q.tamper}</div></div>
     </div>
+    <div class="dactions"><button class="btn" id="pdfbtn" type="button" title="${LIVE ? "Explainable case report with reasons, model contributions and charts" : "Print this case"}">${LIVE ? T("report") : "Print case"}</button>
+      ${LIVE ? `<button class="btn" id="askbtn" type="button">${esc(T("ask"))}</button>` : ""}</div>
     <div class="chartbox">
       <div class="label">Weekly average, kWh/day</div>
       ${lineChart({ labels: D.meta.week_starts, yFmt: v => (v === 0 || v >= 10 || Number.isInteger(v)) ? v.toFixed(0) : v.toFixed(1), series: [
@@ -484,6 +544,8 @@ function renderDetail() {
     </div>
     <p class="note">${LIVE ? "Outcomes are saved to the vigilance log and used at the next retrain. A meter fault goes to the metering team, not vigilance." : "Demo copy: outcomes are kept on this page only. In the running system they are saved and used at the next retrain."}</p>`}`;
   $("#closebtn").onclick = () => { sel = null; renderDetail(); };
+  $("#pdfbtn").onclick = () => LIVE ? downloadPdf(`/api/reports/consumer/${encodeURIComponent(q.id)}.pdf?lang=${LANG}`, `case_report_${q.id}.pdf`) : window.print();
+  $("#askbtn") && ($("#askbtn").onclick = () => { openChat(); ask(LANG === "gu" ? `${q.id} શા માટે ફ્લેગ થયો?` : `Why was ${q.id} flagged?`); });
   box.querySelectorAll("[data-out]").forEach(b => b.onclick = () => recordOutcome(q, b.dataset.out));
 }
 async function recordOutcome(q, outcome) {
@@ -638,10 +700,12 @@ function route() {
   VIEWS.forEach(x => { $("#v-" + x).hidden = x !== v; $("#t-" + x).setAttribute("aria-selected", x === v); });
   if (v === "queue") renderQueue(); else if (v === "areas") renderAreas(); else renderModel();
 }
-function renderAll() { renderTop(); route(); }
+function renderAll() { renderTop(); route(); renderChatChrome(); }
 async function load() { D = EMBEDDED || await apiJSON("/api/dashboard"); }
 async function boot() {
-  if (LIVE) { const w = await apiJSON("/api/whoami"); ROLE = w.role; OPEN = w.open_mode; DEMO = w.demo_tools; }
+  if (LIVE) { const w = await apiJSON("/api/whoami"); ROLE = w.role; OPEN = w.open_mode; DEMO = w.demo_tools; CHATMODE = w.chat_mode || "rules"; }
+  $("#dl-route").hidden = $("#dl-model").hidden = !LIVE;
+  $("#chatfab").hidden = !LIVE || !$("#chatbox").hidden;
   await load();
   const fsel = $("#f-feeder"), keep = fsel.value;
   fsel.innerHTML = `<option value="">All</option>` + [...new Set(D.queue.map(q => q.feeder))].sort().map(f => `<option>${f}</option>`).join("");
@@ -662,6 +726,80 @@ function downloadList() {
   a.download = `inspection_list_${D.meta.as_of}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
 }
+
+/* PDFs come from the API (with the caller's key), saved via a blob link. */
+async function downloadPdf(path, name) {
+  toast("Preparing PDF…");
+  try {
+    const r = await api(path);
+    if (!r.ok) { let j = {}; try { j = await r.json(); } catch {} throw new Error(j.detail || r.statusText); }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await r.blob()); a.download = name;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    document.querySelectorAll(".toast").forEach(t => t.remove());
+  } catch (e) { toast(`Could not create the PDF: ${e.message}`); }
+}
+function downloadRoute() {
+  const p = new URLSearchParams({ capacity: Math.max(5, Math.min(150, +$("#f-cap").value || 25)) });
+  if ($("#f-feeder").value) p.set("feeder", $("#f-feeder").value);
+  if ($("#f-band").value) p.set("band", $("#f-band").value);
+  downloadPdf(`/api/reports/queue.pdf?${p}`, `inspection_route_${D.meta.as_of}.pdf`);
+}
+
+/* ---------- assistant (read-only Q&A; Claude when the server has a key, else offline rules) ---------- */
+let CHAT = [], CHATMODE = "rules", chatBusy = false;
+function renderChatChrome() {
+  $("#chatfab-t").textContent = T("ask");
+  $("#cin").placeholder = T("ph");
+  $("#cmode").textContent = CHATMODE === "claude" ? "AI · Claude" : "Offline rules";
+  $("#cmode").className = "cmode" + (CHATMODE === "claude" ? " ai" : "");
+  $("#cmode").title = CHATMODE === "claude" ? "Answers by Claude using live console data" : "Keyword-based answers from live console data (no AI key configured)";
+  $("#csugg").innerHTML = CHAT.length ? "" : T("sugg").map(x => `<button type="button">${esc(x)}</button>`).join("");
+  renderMsgs();
+}
+const ID_RE = /\b(C\d{5}|DT-\d{3}|FDR-\d{2})\b/g;
+function linkIds(text) { return esc(text).replace(ID_RE, id => `<a data-id="${id}" tabindex="0" role="link">${id}</a>`); }
+function renderMsgs() {
+  const box = $("#cmsgs");
+  const msgs = CHAT.length ? CHAT : [{ role: "assistant", content: T("hello") }];
+  box.innerHTML = msgs.map(m => `<div class="msg ${m.role === "user" ? "user" : "bot"}" lang="${/[઀-૿]/.test(m.content) ? "gu" : "en"}">${m.role === "user" ? esc(m.content) : linkIds(m.content)}</div>`).join("")
+    + (chatBusy ? `<div class="msg bot typing">…</div>` : "");
+  box.scrollTop = box.scrollHeight;
+}
+function openChat() { $("#chatbox").hidden = false; $("#chatfab").hidden = true; renderChatChrome(); $("#cin").focus(); }
+function closeChat() { $("#chatbox").hidden = true; $("#chatfab").hidden = !LIVE; $("#chatfab").focus(); }
+async function ask(text) {
+  text = text.trim();
+  if (!text || chatBusy) return;
+  CHAT.push({ role: "user", content: text }); chatBusy = true; renderChatChrome();
+  try {
+    const r = await apiJSON("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: CHAT.slice(-10), lang: LANG }) });
+    CHAT.push({ role: "assistant", content: r.answer }); CHATMODE = r.mode || CHATMODE;
+  } catch (e) { CHAT.push({ role: "assistant", content: `Sorry, the assistant is unavailable (${e.message}).` }); }
+  chatBusy = false; renderChatChrome();
+}
+function followId(id) {
+  if (id.startsWith("C")) {
+    if (D.queue.some(q => q.id === id)) {
+      $("#f-feeder").value = ""; $("#f-band").value = ""; $("#f-cap").value = 150;
+      sel = id; location.hash = "queue"; route();
+      document.querySelector(`.row[data-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
+      if (window.innerWidth <= 900) closeChat();
+    } else downloadPdf(`/api/reports/consumer/${id}.pdf?lang=${LANG}`, `case_report_${id}.pdf`);
+  } else if (id.startsWith("DT-")) { selDT = id; location.hash = "areas"; route(); }
+  else { $("#f-feeder").value = id; $("#f-band").value = ""; sel = null; location.hash = "queue"; route(); }
+}
+$("#chatfab").onclick = openChat;
+$("#chatclose").onclick = closeChat;
+$("#chatclear").onclick = () => { CHAT = []; renderChatChrome(); $("#cin").focus(); };
+$("#chatbox").addEventListener("keydown", e => { if (e.key === "Escape") closeChat(); });
+$("#cform").onsubmit = e => { e.preventDefault(); const v = $("#cin").value; $("#cin").value = ""; ask(v); };
+$("#csugg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) ask(b.textContent); });
+$("#cmsgs").addEventListener("click", e => { const a = e.target.closest("a[data-id]"); if (a) followId(a.dataset.id); });
+$("#cmsgs").addEventListener("keydown", e => { const a = e.target.closest("a[data-id]"); if (a && e.key === "Enter") followId(a.dataset.id); });
+$("#dl-route").onclick = downloadRoute;
+$("#dl-model").onclick = () => downloadPdf("/api/reports/model.pdf", `model_summary_${D.meta.active_model}.pdf`);
 
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => { location.hash = t.dataset.view; });
 window.addEventListener("hashchange", route);

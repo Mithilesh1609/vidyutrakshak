@@ -16,6 +16,10 @@ Endpoints
   GET  /api/models
   POST /api/models/{v}/activate  roll back / forward
   GET  /api/whoami               role of the caller's key
+  POST /api/chat                 ask the assistant (Claude, or offline rules)
+  GET  /api/reports/consumer/{id}.pdf?lang=en|gu   explainable case report
+  GET  /api/reports/queue.pdf?capacity=50&feeder=  inspection route sheet
+  GET  /api/reports/model.pdf    model explainability summary
 
 Access control: set VR_API_KEYS="viewer:key1,vigilance:key2,admin:key3".
 Viewers read, vigilance officers can also submit outcomes, admins can also
@@ -36,6 +40,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sklearn.metrics import average_precision_score
 
+from . import assistant, reports, views
 from . import features as fx
 from .model import FEATURES, Registry, add_anomaly_score, cv_oof, eval_ranking, predict, score, train
 from .pipeline import (DASH, DATA, LIVE, MODELS, STATIC, atomic_csv, build_state, load_inspections, run,
@@ -132,7 +137,7 @@ def health():
 @app.get("/api/whoami")
 def whoami(role=Depends(require("viewer"))):
     """Lets the console show only the actions the caller's key allows."""
-    return {"role": role, "open_mode": not _keys(), "demo_tools": _demo_tools()}
+    return {"role": role, "open_mode": not _keys(), "demo_tools": _demo_tools(), "chat_mode": assistant.mode()}
 
 
 @app.get("/api/dashboard")
@@ -143,19 +148,8 @@ def dashboard(_=Depends(require("viewer"))):
 @app.get("/api/queue")
 def queue(capacity: int = 50, feeder: str | None = None, dt: str | None = None,
           _=Depends(require("viewer"))):
-    S = _scores()
-    S = S[S.inspection_status == "not_inspected"]
-    if feeder:
-        S = S[S.feeder_id == feeder]
-    if dt:
-        S = S[S.dt_id == dt]
-    S = S.nlargest(max(1, min(capacity, 1000)), "risk_prob")
-    cols = ["consumer_id", "dt_id", "feeder_id", "category", "risk_score", "band", "reasons", "reasons_gu",
-            "est_leak_kwh_month", "est_revenue_inr_month", "data_issue"]
-    out = S[cols].to_dict(orient="records")
-    for r in out:
-        r["reasons"], r["reasons_gu"] = list(r["reasons"]), list(r["reasons_gu"])
-    return {"capacity": capacity, "count": len(out), "items": out}
+    items = views.queue_items(STATE, capacity, feeder, dt)
+    return {"capacity": capacity, "count": len(items), "items": items}
 
 
 @app.get("/api/queue.csv")
@@ -177,27 +171,10 @@ def queue_csv(capacity: int = 50, feeder: str | None = None, dt: str | None = No
 
 @app.get("/api/consumers/{cid}")
 def consumer(cid: str, _=Depends(require("viewer"))):
-    S = _scores().set_index("consumer_id")
-    if cid not in S.index:
+    try:
+        return views.consumer_detail(STATE, cid)
+    except views.NotFound:
         raise HTTPException(404, f"No consumer with ID {cid}.")
-    r = S.loc[cid]
-    i = int(np.where(STATE["F"].consumer_id.to_numpy() == cid)[0][0])
-    ctx = STATE["ctx"]
-    last = ctx["X"].shape[1]
-    window = slice(last - 180, last)
-    reads = ctx["X"][i, window]
-    return {
-        "consumer_id": cid, "dt_id": r.dt_id, "feeder_id": r.feeder_id, "category": r.category,
-        "risk_score": float(r.risk_score), "band": r.band,
-        "reasons": list(r.reasons), "reasons_gu": list(r.reasons_gu),
-        "inspection_status": r.inspection_status, "data_issue": bool(r.data_issue),
-        "features": {f: float(r[f]) for f in FEATURES},
-        "estimates": {"leak_kwh_month": float(r.est_leak_kwh_month),
-                      "revenue_inr_month": float(r.est_revenue_inr_month)},
-        "daily": {"dates": ctx["dates"][window],
-                  "recorded_kwh": [None if np.isnan(v) else round(float(v), 2) for v in reads],
-                  "expected_kwh": [round(float(v), 2) for v in (ctx["pr_base"][i] * ctx["peer"][i, window])]},
-    }
 
 
 @app.get("/api/dts")
@@ -223,6 +200,49 @@ def feeders(_=Depends(require("viewer"))):
 @app.get("/api/models")
 def models(_=Depends(require("viewer"))):
     return STATE["reg"].list()
+
+
+# ------------------------------------------------------------------ assistant + reports
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
+class Chat(BaseModel):
+    messages: list[ChatTurn] = Field(min_length=1, max_length=40)
+    lang: Literal["en", "gu"] = "en"
+
+
+@app.post("/api/chat")
+def chat(body: Chat, _=Depends(require("viewer"))):
+    """Read-only Q&A over the live scores. Stateless: the console sends the history."""
+    return assistant.answer(STATE, [m.model_dump() for m in body.messages], body.lang)
+
+
+def _pdf(data: bytes, name: str) -> Response:
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.get("/api/reports/consumer/{cid}.pdf")
+def report_consumer(cid: str, lang: Literal["en", "gu"] = "en", _=Depends(require("viewer"))):
+    try:
+        return _pdf(reports.consumer_report(STATE, cid, lang), f"case_report_{cid.upper()}.pdf")
+    except views.NotFound:
+        raise HTTPException(404, f"No consumer with ID {cid}.")
+
+
+@app.get("/api/reports/queue.pdf")
+def report_queue(capacity: int = 50, feeder: str | None = None, dt: str | None = None,
+                 band: Literal["High", "Medium", "Low"] | None = None, _=Depends(require("viewer"))):
+    items = views.queue_items(STATE, capacity, feeder, dt, band)
+    note = " ".join(f"{k} {v}." for k, v in (("Feeder", feeder), ("DT", dt), ("Band", band)) if v)
+    return _pdf(reports.route_report(STATE, items, note), "inspection_route.pdf")
+
+
+@app.get("/api/reports/model.pdf")
+def report_model(_=Depends(require("viewer"))):
+    return _pdf(reports.model_report(STATE), f"model_summary_{STATE['dash']['meta']['active_model']}.pdf")
 
 
 # ------------------------------------------------------------------ writes

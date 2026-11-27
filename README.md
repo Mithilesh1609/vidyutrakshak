@@ -35,8 +35,8 @@ registry and outcome log are kept in `models.prev/`. The API never trains on sta
 artifacts and asks you to run the pipeline if they are missing (`VR_AUTO_BUILD=1` builds them instead).
 A recorded outcome updates the queue, KPIs and files immediately. State is file-based: run one worker.
 
-Tests: `pytest -q` (10 tests: quality bars, calibration, promotion gate, every API
-route, access roles, ingest and pseudonymisation, Gujarati reasons). Tests run in
+Tests: `pytest -q` (17 tests: quality bars, calibration, promotion gate, every API
+route, access roles, ingest and pseudonymisation, Gujarati reasons, assistant, PDF reports). Tests run in
 their own temporary folders and never change the demo state.
 
 Demo video: `.venv/bin/python scripts/demo_video/make_video.py` (with the demo server running) records the
@@ -112,10 +112,38 @@ script's docstring), `python scripts/stress_test.py`, `python scripts/benchmark.
 | POST | `/api/retrain` (returns `promoted` and the gate's reason) | admin |
 | POST | `/api/models/{v}/activate` | admin |
 | POST | `/api/demo/field-round` (demo only: open mode on simulated data) | admin |
+| POST | `/api/chat` `{messages: [{role, content}], lang}` (read-only assistant) | viewer |
+| GET | `/api/reports/consumer/{id}.pdf?lang=en\|gu` · `/api/reports/queue.pdf?capacity=50&feeder=&band=` · `/api/reports/model.pdf` | viewer |
 
 Set `VR_API_KEYS="viewer:k1,vigilance:k2,admin:k3"` to enforce roles; clients send
 `X-API-Key`. The console asks for a key and shows only the actions that role
 allows. With no keys set it runs in open demo mode. Interactive docs at `/docs`.
+
+## Assistant and explainable PDFs
+
+**Assistant.** The console's "Ask VidyutRakshak" panel answers questions in English or Gujarati:
+why a consumer was flagged, the riskiest consumers on a feeder or DT, transformer losses, network totals,
+model quality, and what a metric means. IDs in answers link to the consumer, DT or feeder. It is read-only:
+it cannot record outcomes, retrain or switch models.
+
+- With `ANTHROPIC_API_KEY` set on the server, Claude (`claude-opus-5-5`) answers, calling read-only tools
+  over the live scores (`vidyutrakshak/assistant.py`). It is told to quote only tool results and never to call
+  a consumer a thief. What leaves the server: the question and the tool results (pseudonymised consumer IDs,
+  scores, reason text, area totals). No meter series or real consumer numbers.
+- Without a key, or with `VR_CHAT_LLM=0`, a keyword matcher answers the same questions from the same tools,
+  with no network. Any API error also falls back to it. The panel shows which engine answered.
+
+**PDFs.** Built on the server with fpdf2, with Gujarati shaped by HarfBuzz (Noto fonts in
+`vidyutrakshak/fonts/`, SIL OFL):
+
+| Report | Contents | Console button |
+|---|---|---|
+| Case report | Score and band; reasons in English and Gujarati; TreeSHAP contributions (what pushed the score up or down); 12 months of metered vs peer-expected use; DT loss vs baseline; estimates; a field record box | Queue detail: "Case report (PDF)" |
+| Route sheet | The day's queue by feeder and DT, top reasons, outcome tick-boxes | Queue toolbar: "Route sheet (PDF)" |
+| Model summary | Model vs random and rule baselines, global feature importance, calibration, reason-code glossary, version history and gate verdict | Model tab |
+
+The offline console (`dist/vidyutrakshak_console.html`) has no server, so the assistant and PDFs are hidden
+there; "Print case" prints the selected consumer instead.
 
 ## Plugging in real data
 
@@ -154,6 +182,10 @@ vidyutrakshak/
   i18n.py       reason text in English and Gujarati
   pipeline.py   end-to-end run (simulated or real data), feedback loop, ablation, export
   api.py        FastAPI service: roles, promotion gate, route sheet
+  views.py      read-only views shared by the API, assistant and reports
+  assistant.py  chat: Claude tool use, offline rules fallback
+  reports.py    explainable PDFs (case report, route sheet, model summary)
+  fonts/        Noto Sans + Noto Sans Gujarati (SIL OFL)
 static/index.html     inspector console (served at /)
 scripts/              demo_reset.sh, build_static_dashboard.py, validate_sgcc.py,
                       stress_test.py, benchmark.py, demo_video/make_video.py

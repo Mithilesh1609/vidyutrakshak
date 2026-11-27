@@ -7,4 +7,7 @@ services:
       # Leave empty for open demo mode. Format: role:key,role:key
       # Roles: viewer (read), vigilance (+ record outcomes), admin (+ retrain)
       VR_API_KEYS: ""
+      # Optional: lets Claude answer in the console assistant. Without it the
+      # assistant uses its offline rules. Set VR_CHAT_LLM: "0" to force offline.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     restart: unless-stopped
